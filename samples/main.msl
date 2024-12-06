@@ -1,0 +1,9 @@
+func test(int value): int {
+    return value;
+}
+
+func main(): int {
+    var a: int = test(10);
+
+    return a;
+}
