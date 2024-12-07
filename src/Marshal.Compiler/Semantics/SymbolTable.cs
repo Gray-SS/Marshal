@@ -37,34 +37,48 @@ public readonly struct SymbolKey : IEquatable<SymbolKey>
 
 public class SymbolTable
 {
-    public IReadOnlyCollection<Symbol> Symbols => _symbols.Values;
+    public IEnumerable<Symbol> Symbols => _scopes.SelectMany(x => x.Values);
 
-    private readonly Dictionary<SymbolKey, Symbol> _symbols;
+    private readonly Stack<Dictionary<SymbolKey, Symbol>> _scopes;
 
     public SymbolTable()
     {
-        _symbols = new Dictionary<SymbolKey, Symbol>();
+        _scopes = new Stack<Dictionary<SymbolKey, Symbol>>();
+        EnterScope();
+    }
+
+    public void EnterScope()
+    {
+        _scopes.Push([]);
+    }
+
+    public void ExitScope()
+    {
+        if (_scopes.Count > 1)
+        {
+            _scopes.Pop();
+        }
+        else
+            throw new InvalidOperationException("impossible de sortir de la scope actuelle.");
     }
 
     public bool AddSymbol(Symbol symbol)
     {
         var key = new SymbolKey(symbol.Name, symbol.Type);
-        return _symbols.TryAdd(key, symbol);
-    }
-
-    public void RemoveSymbol(string name, SymbolType type)
-    {
-        var key = new SymbolKey(name, type);
-        _symbols.Remove(key);
+        return _scopes.Peek().TryAdd(key, symbol);
     }
 
     public Symbol? GetSymbol(string name, SymbolType type)
     {
         var key = new SymbolKey(name, type);
-        if (_symbols.TryGetValue(key, out Symbol? symbol))
-            return symbol;
 
-        return symbol;
+        foreach (var scope in _scopes)
+        {
+            if (scope.TryGetValue(key, out Symbol? symbol))
+                return symbol;
+        }
+        
+        return null;
     }
 
     public TypeSymbol GetType(string name)
@@ -88,39 +102,37 @@ public class SymbolTable
     public bool HasSymbol(string name, SymbolType type)
     {
         var key = new SymbolKey(name, type);
-        return _symbols.ContainsKey(key);
+
+        foreach (var scope in _scopes)
+        {
+            if (scope.ContainsKey(key))
+                return true;
+        }
+        
+        return false;
     }
 
     public bool TryGetSymbol(string name, SymbolType type, [NotNullWhen(true)] out Symbol? symbol)
     {
-        var key = new SymbolKey(name, type);
-        return _symbols.TryGetValue(key, out symbol);
+        symbol = GetSymbol(name, type);
+        return symbol != null;
     }
 
     public bool TryGetType(string name, [NotNullWhen(true)] out TypeSymbol? type)
     {
-        var key = new SymbolKey(name, SymbolType.CustomType);
-        _symbols.TryGetValue(key, out Symbol? symbol);
-        type = symbol as TypeSymbol;
-
-        return symbol != null;
+        type = GetSymbol(name, SymbolType.CustomType) as TypeSymbol;
+        return type != null;
     }
 
     public bool TryGetVariable(string name, [NotNullWhen(true)] out VariableSymbol? variable)
     {
-        var key = new SymbolKey(name, SymbolType.Variable);
-        _symbols.TryGetValue(key, out Symbol? symbol);
-        variable = symbol as VariableSymbol;
-
-        return symbol != null;
+        variable = GetSymbol(name, SymbolType.Variable) as VariableSymbol;
+        return variable != null;
     }
 
-    public bool TryGetFunction(string name, [NotNullWhen(true)] out FunctionSymbol? type)
+    public bool TryGetFunction(string name, [NotNullWhen(true)] out FunctionSymbol? function)
     {
-        var key = new SymbolKey(name, SymbolType.Function);
-        _symbols.TryGetValue(key, out Symbol? symbol);
-        type = symbol as FunctionSymbol;
-
-        return symbol != null;
+        function = GetSymbol(name, SymbolType.Function) as FunctionSymbol;
+        return function != null;
     }
 }

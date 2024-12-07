@@ -8,4 +8,9 @@ public class CompilationUnit : SyntaxNode
     {
         Statements = statements;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

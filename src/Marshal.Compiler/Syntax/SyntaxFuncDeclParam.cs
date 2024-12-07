@@ -1,7 +1,13 @@
+using Marshal.Compiler.Semantics;
+
 namespace Marshal.Compiler.Syntax;
 
 public class SyntaxFuncDeclParam
 {
+    public string Name => NameIdentifier.Value;
+
+    public TypeSymbol? ParamType { get; set; }
+
     public Token TypeIdentifier { get; }
 
     public Token NameIdentifier { get; }

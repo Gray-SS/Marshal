@@ -56,6 +56,8 @@ public class Parser
             return ParseFunCallStatement();
         else if (CurrentToken.Type == TokenType.Identifier)
             return ParseAssignmentStatement();
+        else if (CurrentToken.Type == TokenType.OpenCurlyBracket)
+            return ParseScopeStatement();
 
         throw new ParseDetailedException($"token inattendu '{CurrentToken.Value}'.", CurrentToken.Location);
     }
@@ -204,7 +206,13 @@ public class Parser
 
     private LiteralExpression ParseLiteralExpression()
     {
-        Token token = Expect(TokenType.NumberLiteral, "un literal est attendu pour une expression de type litérale.");
+        Token token = NextToken();
+        if (token.Type != TokenType.IntLiteral &&
+            token.Type != TokenType.StringLiteral)
+        {
+            throw new ParseDetailedException("un literal est attendu pour une expression de type litérale.", token.Location);
+        }
+
         return new LiteralExpression(token);
     }
 

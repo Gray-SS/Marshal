@@ -8,4 +8,9 @@ public class VarRefExpression : SyntaxExpression
     {
         NameIdentifier = nameIdentifier;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

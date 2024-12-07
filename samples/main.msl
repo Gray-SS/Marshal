@@ -1,9 +1,13 @@
-func test(int value): int {
-    return value;
-}
+//TODO: Ajouter des opérations basique 
+//TODO: Ajouter les tableaux
+//TODO: Ajouter les pointeurs
+//TODO: Ajouter les opérateurs '&' et '*'
+//TODO: Ajouter des commentaires
+//TODO: Ajouter les structures
+//TODO: Créer une structure string
+//TODO: Créer une librairie standard
+//TODO: Publier et en faire une vidéo ?
 
 func main(): int {
-    var a: int = test(10);
-
-    return a;
+    return 0;
 }

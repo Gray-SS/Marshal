@@ -8,4 +8,9 @@ public class ScopeStatement : SyntaxStatement
     {
         Statements = statements;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

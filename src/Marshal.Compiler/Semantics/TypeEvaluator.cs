@@ -35,7 +35,7 @@ public class TypeEvaluator
     {
         var token = literal.LiteralToken;
         
-        if (token.Type == TokenType.NumberLiteral) 
+        if (token.Type == TokenType.IntLiteral) 
             return Symbol.Int;
 
         return Symbol.Void;

@@ -8,4 +8,9 @@ public class LiteralExpression : SyntaxExpression
     {
         LiteralToken = literalToken;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

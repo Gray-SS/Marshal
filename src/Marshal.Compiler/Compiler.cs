@@ -1,3 +1,4 @@
+using Swigged.LLVM;
 using System.Diagnostics;
 using Marshal.Compiler.CodeGen;
 using Marshal.Compiler.Errors;
@@ -9,22 +10,23 @@ namespace Marshal.Compiler;
 
 public class Compiler
 {
-    private readonly ErrorHandler _errorHandler = new();
-    private readonly SymbolTable _symbolTable;
+    public SymbolTable GlobalTable { get; }
+
     private readonly Options _options;
+    private readonly ErrorHandler _errorHandler = new();
 
     public Compiler(Options options)
     {
         _options = options;
 
-        _symbolTable = new SymbolTable();
-        _symbolTable.AddSymbol(Symbol.Byte);
-        _symbolTable.AddSymbol(Symbol.Short);
-        _symbolTable.AddSymbol(Symbol.String);
-        _symbolTable.AddSymbol(Symbol.Int);
-        _symbolTable.AddSymbol(Symbol.Long);
-        _symbolTable.AddSymbol(Symbol.Char);
-        _symbolTable.AddSymbol(Symbol.Void);
+        GlobalTable = new SymbolTable();
+        GlobalTable.AddSymbol(Symbol.Byte);
+        GlobalTable.AddSymbol(Symbol.Short);
+        GlobalTable.AddSymbol(Symbol.String);
+        GlobalTable.AddSymbol(Symbol.Int);
+        GlobalTable.AddSymbol(Symbol.Long);
+        GlobalTable.AddSymbol(Symbol.Char);
+        GlobalTable.AddSymbol(Symbol.Void);
     }
 
     public bool Compile()
@@ -94,6 +96,8 @@ public class Compiler
         var lexer = new Lexer(ctx, _errorHandler);
         var tokens = lexer.Tokenize();
 
+        // Console.WriteLine(string.Join('\n', tokens.Select(x => $"[{x.Type}:{x.Value}]")));
+
         if (_errorHandler.HasError) return false;
 
         var parser = new Parser(tokens, ctx, _errorHandler);
@@ -101,20 +105,27 @@ public class Compiler
 
         if (_errorHandler.HasError) return false;
 
-        var semanticAnalyzer = new SemanticAnalyzer(_symbolTable, _errorHandler);
-        semanticAnalyzer.Analyze(ast);
+        var semanticAnalyzer = new SemanticAnalyzer(GlobalTable, _errorHandler);
+        semanticAnalyzer.Visit(ast);
 
         if (_errorHandler.HasError) return false;
 
-        var codeGen = new CodeGenerator(_symbolTable, _errorHandler);
-        var asm = codeGen.Generate(ast);
+        var module = LLVM.ModuleCreateWithName(ctx.Source.FullPath);
+
+        var codeGen = new CodeGenerator(module);
+        codeGen.Visit(ast);
 
         if (_errorHandler.HasError) return false;
-
-        ConsoleHelper.WriteLine(ConsoleColor.DarkGreen, asm);
 
         string llvmFile = $"{Path.Combine(Path.GetDirectoryName(ctx.Source.RelativePath)!, Path.GetFileNameWithoutExtension(ctx.Source.RelativePath))}.mo";
-        File.WriteAllText(llvmFile, asm);
+
+        var errorMsg = new MyString();
+        LLVM.DumpModule(module);
+
+        if (!LLVM.VerifyModule(module, VerifierFailureAction.PrintMessageAction, errorMsg))
+            return false;
+
+        LLVM.WriteBitcodeToFile(module, llvmFile);
 
         string fileObj = $"{Path.Combine(Path.GetDirectoryName(ctx.Source.RelativePath)!, Path.GetFileNameWithoutExtension(ctx.Source.RelativePath))}.o";
 

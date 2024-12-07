@@ -21,7 +21,8 @@ public enum TokenType : byte
     //Specials
     EOF,
     Identifier,
-    NumberLiteral,
+    IntLiteral,
+    StringLiteral,
     Invalid,
     Equal,
     SemiColon,

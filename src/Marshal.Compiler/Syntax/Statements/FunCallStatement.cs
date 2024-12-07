@@ -11,4 +11,9 @@ public class FunCallStatement : SyntaxStatement
         Parameters = parameters;
         NameIdentifier = nameIdentifier;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

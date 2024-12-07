@@ -1,7 +1,13 @@
+using Marshal.Compiler.Semantics;
+
 namespace Marshal.Compiler.Syntax.Statements;
 
 public class FuncDeclStatement : SyntaxStatement
 {
+    public string Name => NameToken.Value;
+
+    public TypeSymbol? ReturnType { get; set; }
+
     public Token NameToken { get; }
 
     public Token TypeToken { get; }
@@ -20,5 +26,10 @@ public class FuncDeclStatement : SyntaxStatement
         IsExtern = isExtern;
         Params = parameters;
         Body = body;
+    }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
     }
 }

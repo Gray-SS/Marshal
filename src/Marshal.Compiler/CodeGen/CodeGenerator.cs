@@ -1,140 +1,188 @@
-using Marshal.Compiler.Errors;
-using Marshal.Compiler.Semantics;
+using Swigged.LLVM;
 using Marshal.Compiler.Syntax;
+using Marshal.Compiler.Semantics;
+using Marshal.Compiler.Syntax.Expressions;
 using Marshal.Compiler.Syntax.Statements;
 
 namespace Marshal.Compiler.CodeGen;
 
-public class CodeGenerator
+public class CodeGenerator : IVisitor
 {
-    private readonly SymbolTable _symbols;
-    private readonly LLVMBuilder _builder;
-    private readonly ErrorHandler _errorHandler;
-    private readonly TypeEvaluator _typeEvaluator;
+    private int _globalStringCount;
+    private readonly ModuleRef _module;
+    private readonly BuilderRef _builder;
 
-    public CodeGenerator(SymbolTable symbols, ErrorHandler errorHandler)
+    private readonly Stack<ValueRef> _valueStack;
+    private readonly Dictionary<string, ValueRef> _namedValues;
+
+    public CodeGenerator(ModuleRef module)
     {
-        _symbols = symbols;
-        _errorHandler = errorHandler;
-        _typeEvaluator = new TypeEvaluator(symbols, errorHandler);
-        _builder = new LLVMBuilder(_typeEvaluator);
+        _valueStack = new Stack<ValueRef>();
+        _namedValues = new Dictionary<string, ValueRef>();
+
+        _module = module;
+        _builder = LLVM.CreateBuilder();
     }
 
-    public string Generate(CompilationUnit program)
+    public void Visit(CompilationUnit unit)
     {
-        _builder.Clear();
-
-        foreach (var statement in program.Statements)
+        foreach (var statement in unit.Statements)
         {
-            GenerateStatement(statement);
-        }
-
-        return _builder.Build();
-    }
-
-    private void GenerateStatement(SyntaxStatement statement)
-    {
-        switch (statement)
-        {
-            case FuncDeclStatement funcDeclStmt:
-                GenerateFuncDeclStatement(funcDeclStmt);
-                break;
-            case VarDeclStatement varDeclStmt:
-                GenerateVarDeclStatement(varDeclStmt);
-                break;
-            case ScopeStatement scopeStmt:
-                GenerateScopeStatement(scopeStmt);
-                break;
-            case ReturnStatement returnStmt:
-                GenerateReturnStatement(returnStmt);
-                break;
-            case AssignmentStatement assignStmt:
-                GenerateAssignmentStatement(assignStmt);
-                break;
-            case FunCallStatement funCallStmt:
-                GenerateFunCallStatement(funCallStmt);
-                break;
+            statement.Accept(this);
         }
     }
 
-    private void GenerateScopeStatement(ScopeStatement scope)
+    public void Visit(AssignmentStatement stmt)
     {
-        _builder.BeginScope();
+        string varName = stmt.NameIdentifier.Value;
+        if (!_namedValues.TryGetValue(varName, out ValueRef varPtr))
+            throw new Exception("variable is not declared");
 
-        foreach (var statement in scope.Statements)
-        {
-            GenerateStatement(statement);
-        }
-
-        _builder.EndScope();
+        stmt.AssignExpr.Accept(this);
+        LLVM.BuildStore(_builder, _valueStack.Pop(), varPtr);
     }
 
-    private void GenerateFuncDeclStatement(FuncDeclStatement statement)
+    public void Visit(ScopeStatement stmt)
     {
-        FunctionSymbol? symbol = _symbols.GetSymbol(statement.NameToken.Value, SymbolType.Function) as FunctionSymbol;
-        if (symbol == null) 
+        foreach (var statement in stmt.Statements)
         {
-            _errorHandler.Report(ErrorType.Fatal, $"fonction non définie '{statement.NameToken.Value}'.");
+            statement.Accept(this);
+        }
+    }
+
+    public void Visit(FunCallStatement stmt)
+    {
+        string functionName = stmt.NameIdentifier.Value;
+        if (!_namedValues.TryGetValue(functionName, out ValueRef function))
+            throw new Exception("the function is not declared.");
+
+        var args = new ValueRef[stmt.Parameters.Count];
+        for (int i = 0; i < args.Length; i++)
+        {
+            stmt.Parameters[i].Accept(this);
+            args[i] = _valueStack.Pop();
+        }
+
+        LLVM.BuildCall(_builder, function, args, functionName);
+    }
+
+    public void Visit(FuncDeclStatement stmt)
+    {
+        var paramsType = new TypeRef[stmt.Params.Count];
+        for (int i = 0; i < paramsType.Length; i++)
+        {
+            paramsType[i] = ToLLVMType(stmt.Params[i].ParamType!);
+        }
+
+        var functionType = LLVM.FunctionType(ToLLVMType(stmt.ReturnType!), paramsType, false);
+
+        if (stmt.IsExtern)
+        {
+            var function = LLVM.AddFunction(_module, stmt.Name, functionType);
+            LLVM.SetLinkage(function, Linkage.ExternalLinkage);
+            _namedValues[stmt.Name] = function;
             return;
         }
 
-        _builder.AddFunctionSignature(symbol, statement);
+        var functionDef = LLVM.AddFunction(_module, stmt.Name, functionType);
+        _namedValues[stmt.Name] = functionDef;
 
-        if (statement.Body != null)
+        for (int i = 0; i < paramsType.Length; i++)
         {
-            GenerateScopeStatement(statement.Body);
+            string paramName = stmt.Params[i].NameIdentifier.Value;
+
+            ValueRef param = LLVM.GetParam(functionDef, (uint)i);
+            LLVM.SetValueName(param, paramName);
+
+            _namedValues[paramName] = param;
         }
+
+        BasicBlockRef entry = LLVM.AppendBasicBlock(functionDef, "entry");
+        LLVM.PositionBuilderAtEnd(_builder, entry);
+
+        stmt.Body?.Accept(this);
     }
-    private void GenerateFunCallStatement(FunCallStatement statement)
+
+
+    public void Visit(ReturnStatement stmt)
     {
-        FunctionSymbol? symbol = _symbols.GetSymbol(statement.NameIdentifier.Value, SymbolType.Function) as FunctionSymbol;
-        if (symbol == null) 
-        {
-            _errorHandler.Report(ErrorType.Fatal, $"fonction non définie '{statement.NameIdentifier.Value}'.");
-            return;
-        }
-
-        _builder.CallFunction(symbol, statement.Parameters);
+        stmt.ReturnExpr.Accept(this);
+        LLVM.BuildRet(_builder, _valueStack.Pop());
     }
 
-    private void GenerateAssignmentStatement(AssignmentStatement statement)
+    public void Visit(VarDeclStatement stmt)
     {
-        VariableSymbol? symbol = _symbols.GetSymbol(statement.NameIdentifier.Value, SymbolType.Variable) as VariableSymbol;
-        if (symbol == null) 
+        var varType = ToLLVMType(stmt.VarType!);
+
+        ValueRef alloca = LLVM.BuildAlloca(_builder, varType, stmt.VarName);
+
+        if (stmt.InitExpression != null)
         {
-            _errorHandler.Report(ErrorType.Fatal, $"variable non définie '{statement.NameIdentifier.Value}'.");
-            return;
+            stmt.InitExpression.Accept(this);
+            ValueRef initValue = _valueStack.Pop();
+            LLVM.BuildStore(_builder, initValue, alloca);
         }
 
-        TypeSymbol? type = _typeEvaluator.Evaluate(statement.AssignExpr);
-        if (type == null || type == Symbol.Void)
-        {
-            _errorHandler.Report(ErrorType.Fatal, $"le type de l'expression n'a pas pû être identifié.");
-            return;
-        }
-
-        _builder.StoreValue(symbol, statement.AssignExpr);
+        _namedValues[stmt.VarName] = alloca;
     }
 
-    private void GenerateVarDeclStatement(VarDeclStatement variable)
+    public void Visit(LiteralExpression expr)
     {
-        VariableSymbol? symbol = _symbols.GetSymbol(variable.NameIdentifier.Value, SymbolType.Variable) as VariableSymbol;
-        if (symbol == null) 
+        if (expr.LiteralToken.Type == TokenType.IntLiteral)
         {
-            _errorHandler.Report(ErrorType.Fatal, $"variable non définie '{variable.NameIdentifier.Value}'.");
-            return;
+            TypeRef type = LLVM.Int32Type();
+            ValueRef value = LLVM.ConstInt(type, (ulong)int.Parse(expr.LiteralToken.Value), false);
+            _valueStack.Push(value);
         }
-
-        _builder.AllocVariable(symbol);
-        if (variable.InitExpression != null)
+        else if (expr.LiteralToken.Type == TokenType.StringLiteral)
         {
-            _builder.StoreValue(symbol, variable.InitExpression);
+            var str = expr.LiteralToken.Value;
+            ValueRef value = LLVM.BuildGlobalString(_builder, str, GetGlobalStrVar());
+            
+            _valueStack.Push(value);
         }
+        else throw new NotImplementedException();
     }
 
-    private void GenerateReturnStatement(ReturnStatement statement)
+    public void Visit(FunCallExpression expr)
     {
-        _builder.ReturnValue(statement.ReturnExpr);
+        if (!_namedValues.TryGetValue(expr.NameIdentifier.Value, out ValueRef function))
+        {
+            throw new Exception("fonction non déclarée.");
+        }
+
+        var args = new ValueRef[expr.Parameters.Count];
+        for (int i = 0; i < args.Length; i++)
+        {
+            expr.Parameters[i].Accept(this);
+            args[i] = _valueStack.Pop();
+        }
+
+        _valueStack.Push(LLVM.BuildCall(_builder, function, args, expr.NameIdentifier.Value));
     }
 
+    public void Visit(VarRefExpression expr)
+    {
+        if (!_namedValues.TryGetValue(expr.NameIdentifier.Value, out ValueRef value))
+        {
+            throw new Exception("variable non déclarée.");
+        }
+        
+        if (LLVM.GetTypeKind(LLVM.TypeOf(value)) == TypeKind.PointerTypeKind)
+        {
+            ValueRef loadedValue = LLVM.BuildLoad(_builder, value, expr.NameIdentifier.Value);
+            _valueStack.Push(loadedValue);
+        }
+        else _valueStack.Push(value);
+    }
+
+    private string GetGlobalStrVar()
+    {
+        return $"globalStr{_globalStringCount++}";
+    }
+
+    private static TypeRef ToLLVMType(TypeSymbol type)
+    {
+        return type.LLVMType!.Value;
+    }
 }

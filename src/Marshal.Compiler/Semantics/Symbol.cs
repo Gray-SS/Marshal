@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Contracts;
 using System.Reflection.Metadata;
+using Swigged.LLVM;
 
 namespace Marshal.Compiler.Semantics;
 
@@ -16,13 +17,13 @@ public abstract class Symbol : IEquatable<Symbol>
     public string Name { get; }
     public abstract SymbolType Type { get; }
 
-    public static readonly TypeSymbol Byte = TypeSymbol.CreatePrimitive("byte", "i8");
-    public static readonly TypeSymbol Short = TypeSymbol.CreatePrimitive("short", "i16");
-    public static readonly TypeSymbol Int = TypeSymbol.CreatePrimitive("int", "i32");
-    public static readonly TypeSymbol Long = TypeSymbol.CreatePrimitive("long", "i64");
-    public static readonly TypeSymbol Char = TypeSymbol.CreatePrimitive("char", "i8");
-    public static readonly TypeSymbol String = TypeSymbol.CreatePrimitive("string", "i8*");
-    public static readonly TypeSymbol Void = TypeSymbol.CreatePrimitive("void", "void");
+    public static readonly TypeSymbol Byte = TypeSymbol.CreatePrimitive("byte", LLVM.Int8Type());
+    public static readonly TypeSymbol Short = TypeSymbol.CreatePrimitive("short", LLVM.Int16Type());
+    public static readonly TypeSymbol Int = TypeSymbol.CreatePrimitive("int", LLVM.Int32Type());
+    public static readonly TypeSymbol Long = TypeSymbol.CreatePrimitive("long", LLVM.Int64Type());
+    public static readonly TypeSymbol Char = TypeSymbol.CreatePrimitive("char", LLVM.Int8Type());
+    public static readonly TypeSymbol Void = TypeSymbol.CreatePrimitive("void", LLVM.VoidType());
+    public static readonly TypeSymbol String = TypeSymbol.CreatePrimitive("string", LLVM.PointerType(LLVM.Int8Type(), 0));
 
     public Symbol(string name)
     {
@@ -122,23 +123,51 @@ public class TypeSymbol : Symbol
 {
     public bool IsPrimitive { get; }
 
-    public string? LLVMType { get; }
+    public bool IsArray { get; }
+
+    public TypeRef? LLVMType { get; }
+
+    public TypeSymbol? ElementType { get; }
+
+    public int? ArraySize { get; }
 
     public override SymbolType Type => SymbolType.CustomType;
 
-    private TypeSymbol(string name, string? llvmType, bool isPrimitive) : base(name)
+    private TypeSymbol(string name, TypeRef? llvmType, bool isPrimitive, bool isArray = false, TypeSymbol? elementType = null, int? arraySize = null) 
+        : base(name)
     {
         LLVMType = llvmType;
         IsPrimitive = isPrimitive;
+        IsArray = isArray;
+        ElementType = elementType;
+        ArraySize = arraySize;
     }
 
-    public static TypeSymbol CreateCustom(string name)
+public static TypeSymbol CreateCustom(string name)
     {
         return new TypeSymbol(name, null, false);
     }
 
-    public static TypeSymbol CreatePrimitive(string name, string llvmType)
+    public static TypeSymbol CreatePrimitive(string name, TypeRef llvmType)
     {
         return new TypeSymbol(name, llvmType, true);
+    }
+
+    public static TypeSymbol CreateArray(TypeSymbol elementType, int? arraySize = null)
+    {
+        if (elementType.IsArray)
+        {
+            throw new InvalidOperationException("Nested arrays are not supported.");
+        }
+
+        var llvmType = arraySize.HasValue
+            ? LLVM.ArrayType(elementType.LLVMType!.Value, (uint)arraySize.Value)
+            : LLVM.PointerType(elementType.LLVMType!.Value, 0);
+
+        var name = arraySize.HasValue 
+            ? $"{elementType.Name}[{arraySize.Value}]"
+            : $"{elementType.Name}[]";
+
+        return new TypeSymbol(name, llvmType, false, true, elementType, arraySize);
     }
 }

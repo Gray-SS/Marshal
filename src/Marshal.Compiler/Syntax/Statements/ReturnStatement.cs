@@ -10,4 +10,9 @@ public class ReturnStatement : SyntaxStatement
         ReturnExpr = returnExpr;
         ReturnKeyword = returnKeyword;
     }
+
+    public override void Accept(IVisitor visitor)
+    {
+        visitor.Visit(this);
+    }
 }

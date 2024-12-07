@@ -55,7 +55,16 @@ public class Lexer
             if (char.IsDigit(CurrentChar))
             {
                 int length = ReadWhile(char.IsDigit);
-                tokens.Add(ReadToken(TokenType.NumberLiteral, length));
+                tokens.Add(ReadToken(TokenType.IntLiteral, length));
+                continue;
+            }
+
+            if (CurrentChar == '"')
+            {
+                Position++;
+                int length = ReadWhile((c) => c != '"');
+                tokens.Add(ReadToken(TokenType.StringLiteral, length));
+                Position++;
                 continue;
             }
 
