@@ -191,7 +191,56 @@ public class Parser
         return new ScopeStatement(statements);
     }
 
-    private SyntaxExpression ParseExpression()
+    private SyntaxExpression ParseExpression(int precedence = 0)
+    {
+        var left = ParsePrimaryExpression();
+
+        while (true)
+        {
+            var opType = GetBinaryOperatorType(CurrentToken.Type);
+            if (opType == null)
+                break;
+
+            int opPrecedence = GetOperatorPrecedence(CurrentToken.Type);
+            if (opPrecedence < precedence)
+                break;
+
+            NextToken();
+
+            var right = ParseExpression(opPrecedence + 1);
+
+            left = new BinaryOpExpression(left, right, opType.Value);
+        }
+
+        return left;
+    }
+
+    private static BinOperatorType? GetBinaryOperatorType(TokenType tokenType)
+    {
+        return tokenType switch
+        {
+            TokenType.Plus => BinOperatorType.Addition,
+            TokenType.Minus => BinOperatorType.Subtraction,
+            TokenType.Asterisk => BinOperatorType.Multiplication,
+            TokenType.Slash => BinOperatorType.Division,
+            _ => null
+        };
+    }
+
+    private static int GetOperatorPrecedence(TokenType tokenType)
+    {
+        return tokenType switch
+        {
+            TokenType.Plus => 1, // Lowest precedence
+            TokenType.Minus => 1, // Lowest precedence
+            TokenType.Asterisk => 2, // Higher precedence
+            TokenType.Slash => 2, // Higher precedence
+            _ => 0
+        };
+    }
+
+
+    private SyntaxExpression ParsePrimaryExpression()
     {
         if (CurrentToken.Type == TokenType.Identifier)
         {

@@ -92,7 +92,7 @@ public class Lexer
             {
                 case '+': tokens.Add(ReadToken(TokenType.Plus, 1)); break;
                 case '-': tokens.Add(ReadToken(TokenType.Minus, 1)); break;
-                case '*': tokens.Add(ReadToken(TokenType.Star, 1)); break;
+                case '*': tokens.Add(ReadToken(TokenType.Asterisk, 1)); break;
                 case '/': tokens.Add(ReadToken(TokenType.Slash, 1)); break;
                 case '=': tokens.Add(ReadToken(TokenType.Equal, 1)); break;
                 case ';': tokens.Add(ReadToken(TokenType.SemiColon, 1)); break;

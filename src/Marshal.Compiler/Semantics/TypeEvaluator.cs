@@ -1,6 +1,7 @@
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Syntax.Expressions;
+using Marshal.Compiler.Syntax.Statements;
 
 namespace Marshal.Compiler.Semantics;
 
@@ -25,10 +26,22 @@ public class TypeEvaluator
                 return EvaluateVarRefExpression(varRefExpr);
             case FunCallExpression funCallExpr:
                 return EvaluateFunCallExpression(funCallExpr);
+            case BinaryOpExpression binOpExpr:
+                return EvaluateBinOpExpression(binOpExpr);
             default:
                 _errorHandler.Report(ErrorType.InternalError, $"l'évaluation du type '{expr.GetType().Name}' n'est pas implémentée.");
                 return Symbol.Void;
         }
+    }
+
+    private TypeSymbol EvaluateBinOpExpression(BinaryOpExpression binOpExpr)
+    {
+        var lType = Evaluate(binOpExpr.Left);
+        var rType = Evaluate(binOpExpr.Right);
+
+        if (lType != rType) return Symbol.Void;
+        
+        return lType;
     }
 
     private TypeSymbol EvaluateTypeLiteralExpression(LiteralExpression literal)

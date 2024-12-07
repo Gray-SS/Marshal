@@ -161,6 +161,31 @@ public class CodeGenerator : IVisitor
         _valueStack.Push(LLVM.BuildCall(_builder, function, args, expr.NameIdentifier.Value));
     }
 
+    public void Visit(BinaryOpExpression stmt)
+    {
+        stmt.Left.Accept(this);
+        stmt.Right.Accept(this);
+
+        var right = _valueStack.Pop();
+        var left = _valueStack.Pop();
+
+        switch (stmt.OpType)
+        {
+            case BinOperatorType.Addition:
+                _valueStack.Push(LLVM.BuildAdd(_builder, left, right, "add_result"));
+                break;
+            case BinOperatorType.Subtraction:
+                _valueStack.Push(LLVM.BuildSub(_builder, left, right, "sub_result"));
+                break;
+            case BinOperatorType.Multiplication:
+                _valueStack.Push(LLVM.BuildMul(_builder, left, right, "mul_result"));
+                break;
+            case BinOperatorType.Division:
+                _valueStack.Push(LLVM.BuildSDiv(_builder, left, right, "div_result"));
+                break;
+        }
+    }
+
     public void Visit(VarRefExpression expr)
     {
         if (!_namedValues.TryGetValue(expr.NameIdentifier.Value, out ValueRef value))

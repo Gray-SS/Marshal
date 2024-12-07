@@ -194,6 +194,10 @@ public class SemanticAnalyzer : IVisitor
         _globalTable.AddSymbol(variable);
     }
 
+    public void Visit(LiteralExpression expr)
+    {
+    }
+
     public void Visit(FunCallExpression expr)
     {
         string functionName = expr.NameIdentifier.Value;
@@ -225,14 +229,24 @@ public class SemanticAnalyzer : IVisitor
         }
     }
 
-    public void Visit(LiteralExpression expr)
-    {
-    }
 
     public void Visit(VarRefExpression expr)
     {
         string varName = expr.NameIdentifier.Value;
         if (!_globalTable.HasSymbol(varName, SymbolType.Variable))
             _errorHandler.ReportDetailed(ErrorType.SemanticError, $"la variable '{varName}' n'est pas définie.", expr.NameIdentifier.Location);
+    }
+
+    public void Visit(BinaryOpExpression expr)
+    {
+        expr.Left.Accept(this);
+        expr.Right.Accept(this);
+
+        TypeSymbol lType = _typeEvaluator.Evaluate(expr.Left);
+        TypeSymbol rType = _typeEvaluator.Evaluate(expr.Right);
+
+        if (lType != rType) {
+            _errorHandler.Report(ErrorType.SemanticError, $"impossible d'appliquer une '{expr.OpType}' entre un type '{lType.Name}' et '{rType.Name}'.");
+        }
     }
 }

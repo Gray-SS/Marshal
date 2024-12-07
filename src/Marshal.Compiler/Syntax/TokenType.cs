@@ -6,7 +6,7 @@ public enum TokenType : byte
     Plus,
     Minus,
     Slash,
-    Star,
+    Asterisk,
     OpenBracket,
     CloseBracket,
     OpenCurlyBracket,

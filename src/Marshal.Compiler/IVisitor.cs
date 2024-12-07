@@ -16,6 +16,8 @@ public interface IVisitor
 
     void Visit(FuncDeclStatement stmt);
 
+    void Visit(BinaryOpExpression stmt);
+
     void Visit(ReturnStatement stmt);
 
     void Visit(VarDeclStatement stmt);
@@ -25,4 +27,5 @@ public interface IVisitor
     void Visit(LiteralExpression expr);
 
     void Visit(VarRefExpression expr);
+
 }

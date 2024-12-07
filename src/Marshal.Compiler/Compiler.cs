@@ -122,9 +122,7 @@ public class Compiler
         var errorMsg = new MyString();
         LLVM.DumpModule(module);
 
-        if (!LLVM.VerifyModule(module, VerifierFailureAction.PrintMessageAction, errorMsg))
-            return false;
-
+        LLVM.VerifyModule(module, VerifierFailureAction.AbortProcessAction, errorMsg);
         LLVM.WriteBitcodeToFile(module, llvmFile);
 
         string fileObj = $"{Path.Combine(Path.GetDirectoryName(ctx.Source.RelativePath)!, Path.GetFileNameWithoutExtension(ctx.Source.RelativePath))}.o";
