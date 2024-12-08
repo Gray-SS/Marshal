@@ -4,7 +4,7 @@ using Marshal.Compiler.Syntax.Statements;
 
 namespace Marshal.Compiler;
 
-public interface IVisitor
+public interface IASTVisitor
 {
     void Visit(CompilationUnit unit);
 
@@ -28,4 +28,5 @@ public interface IVisitor
 
     void Visit(VarRefExpression expr);
 
+    void Visit(ArrayInitExpression expr);
 }

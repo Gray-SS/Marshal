@@ -1,6 +1,5 @@
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Utilities;
-using System.Collections.Generic;
 
 namespace Marshal.Compiler.Errors;
 
@@ -8,7 +7,6 @@ public class ErrorHandler
 {
     public bool HasError { get; private set; }
 
-    // Définir une structure pour les paramètres d'affichage
     private readonly Dictionary<ErrorType, (ConsoleColor color, string label, bool isError)> _errorConfig = new()
     {
         { ErrorType.Warning,        (ConsoleColor.Yellow,    "avertissement",    false) },

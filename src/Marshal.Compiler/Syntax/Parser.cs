@@ -1,26 +1,26 @@
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Syntax.Expressions;
 using Marshal.Compiler.Syntax.Statements;
+using Marshal.Compiler.Types;
+using Marshal.Compiler.Utilities;
 
 namespace Marshal.Compiler.Syntax;
 
-public class Parser
+public class Parser : CompilerPass
 {
-    public CompilationContext Context { get; }
     public int Position { get; private set; }
     public Token CurrentToken => Peek(0);
 
-    private readonly List<Token> _tokens;
-    private readonly ErrorHandler _errorHandler;
-
-    public Parser(List<Token> tokens, CompilationContext ctx, ErrorHandler errorHandler)
+    public Parser(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
-        Context = ctx;
-        _tokens = tokens;
-        _errorHandler = errorHandler;
     }
 
-    public CompilationUnit ParseProgram()
+    public override void Apply()
+    {
+        Context.AST = ParseAST();
+    }
+
+    public CompilationUnit ParseAST()
     {
         var statements = new List<SyntaxStatement>();
         while (CurrentToken.Type != TokenType.EOF)
@@ -33,9 +33,9 @@ public class Parser
             catch (ParseException ex)
             {
                 if (ex is ParseDetailedException dex)
-                    _errorHandler.ReportDetailed(ErrorType.SyntaxError, ex.Message, dex.Location);
+                    ReportDetailed(ErrorType.SyntaxError, ex.Message, dex.Location);
                 else
-                    _errorHandler.Report(ErrorType.SyntaxError, ex.Message);
+                    Report(ErrorType.SyntaxError, ex.Message);
 
                 Synchronize();
             }
@@ -59,7 +59,7 @@ public class Parser
         else if (CurrentToken.Type == TokenType.OpenCurlyBracket)
             return ParseScopeStatement();
 
-        throw new ParseDetailedException($"token inattendu '{CurrentToken.Value}'.", CurrentToken.Location);
+        throw new ParseDetailedException($"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
     }
 
     private AssignmentStatement ParseAssignmentStatement()
@@ -92,17 +92,9 @@ public class Parser
         while (CurrentToken.Type != TokenType.EOF && 
                CurrentToken.Type != TokenType.CloseBracket)
         {
-            if (CurrentToken.Type == TokenType.ParamsKeyword)
-            {
-                Token paramsKeyword = NextToken();
-                parameters.Add(new SyntaxFuncDeclParam(paramsKeyword));
-            }
-            else
-            {
-                Token pTypeId = Expect(TokenType.Identifier, "le type du paramètre est attendu.");
-                Token pNameId = Expect(TokenType.Identifier, "le nom de la variable est attendue.");
-                parameters.Add(new SyntaxFuncDeclParam(pTypeId, pNameId));
-            }
+            MarshalType pTypeId = ParseType("le type du paramètre est attendu.");
+            Token pNameId = Expect(TokenType.Identifier, "le nom de la variable est attendue.");
+            parameters.Add(new SyntaxFuncDeclParam(pTypeId, pNameId));
 
             if (CurrentToken.Type == TokenType.Comma) NextToken();
             else break;
@@ -111,7 +103,7 @@ public class Parser
         Expect(TokenType.CloseBracket, "parenthèse fermante ')' attendue après la liste des paramètres.");
 
         Expect(TokenType.Colon, "le type de retour de la fonction est attendu après les paramètre de la fonction.");
-        Token typeIdentifier = Expect(TokenType.Identifier, "type de retour attendu après les deux-points.");
+        MarshalType returnType = ParseType("type de retour attendu après les deux-points.");
 
         ScopeStatement? body = null;
         if (CurrentToken.Type != TokenType.SemiColon)
@@ -120,7 +112,7 @@ public class Parser
         }
         else NextToken();
 
-        return new FuncDeclStatement(nameIdentifier, typeIdentifier, parameters, body, isExtern);
+        return new FuncDeclStatement(nameIdentifier, returnType, parameters, body, isExtern);
     }
 
     private VarDeclStatement ParseVarDeclStatement()
@@ -129,7 +121,7 @@ public class Parser
         Token nameIdentifier = Expect(TokenType.Identifier, "identifiant de la variable attendu après 'var'.");
 
         Expect(TokenType.Colon, "deux-points ':' attendu après l'identifiant de la variable.");
-        Token typeIdentifier = Expect(TokenType.Identifier, "le type de la variable est attendu après les deux points ':'.");
+        MarshalType type = ParseType("le type de la variable est attendu après les deux points ':'.");
 
         SyntaxExpression? initExpr = null;
         if (CurrentToken.Type == TokenType.Equal)
@@ -140,7 +132,44 @@ public class Parser
 
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration d'une variable.");
 
-        return new VarDeclStatement(nameIdentifier, typeIdentifier, initExpr);
+        return new VarDeclStatement(nameIdentifier, type, initExpr);
+    }
+
+    private MarshalType ParseType(string errorMessage)
+    {
+        MarshalType type = ParsePrimitiveType(errorMessage);
+        
+        while (CurrentToken.Type == TokenType.Asterisk ||
+               CurrentToken.Type == TokenType.OpenSquareBracket)
+        {
+            if (CurrentToken.Type == TokenType.Asterisk)
+            {
+                NextToken();
+                type = new MarshalPointerType(type);
+            }
+            else if (CurrentToken.Type == TokenType.OpenSquareBracket)
+            {
+                NextToken();
+
+                int length = 0;
+                if (CurrentToken.Type == TokenType.IntLiteral)
+                {
+                    var lengthToken = NextToken();
+                    length = int.Parse(lengthToken.Value);
+                }
+
+                Expect(TokenType.CloseSquareBracket, "un crochet de fermeture ']' est attendu après l'ouverture du crochet.");
+                type = new MarshalArrayType(type, length);
+            }
+        }
+
+        return type;
+    }
+
+    private MarshalPrimitiveType ParsePrimitiveType(string errorMessage)
+    {
+        Token identifier = Expect(TokenType.Identifier, errorMessage);
+        return new MarshalPrimitiveType(identifier.Value);
     }
 
     private FunCallStatement ParseFunCallStatement()
@@ -191,7 +220,38 @@ public class Parser
         return new ScopeStatement(statements);
     }
 
-    private SyntaxExpression ParseExpression(int precedence = 0)
+    private SyntaxExpression ParseExpression()
+    {
+        if (CurrentToken.Type == TokenType.OpenCurlyBracket) 
+            return ParseArrayExpression();
+
+        return ParseBinOpExpression();
+    }
+
+    private ArrayInitExpression ParseArrayExpression()
+    {
+        Expect(TokenType.OpenCurlyBracket, "accolade ouvrante '{' est attendue pour une expression initialiseur de tableau.");
+
+        var expressions = new List<SyntaxExpression>();
+
+        while (CurrentToken.Type != TokenType.EOF && 
+               CurrentToken.Type != TokenType.CloseCurlyBracket)
+        {
+            var expr = ParseBinOpExpression();
+            expressions.Add(expr);
+
+            if (CurrentToken.Type == TokenType.Comma)
+                NextToken();
+            else
+                break;
+        } 
+
+        Expect(TokenType.CloseCurlyBracket, "accolade fermante '}' attendue pour la fin de l'expression initialiseur de tableau.");
+
+        return new ArrayInitExpression(expressions);
+    }
+
+    private SyntaxExpression ParseBinOpExpression(int precedence = 0)
     {
         var left = ParsePrimaryExpression();
 
@@ -207,7 +267,7 @@ public class Parser
 
             NextToken();
 
-            var right = ParseExpression(opPrecedence + 1);
+            var right = ParseBinOpExpression(opPrecedence + 1);
 
             left = new BinaryOpExpression(left, right, opType.Value);
         }
@@ -256,13 +316,12 @@ public class Parser
     private LiteralExpression ParseLiteralExpression()
     {
         Token token = NextToken();
-        if (token.Type != TokenType.IntLiteral &&
-            token.Type != TokenType.StringLiteral)
-        {
-            throw new ParseDetailedException("un literal est attendu pour une expression de type litérale.", token.Location);
-        }
+        LiteralType literalType = token.GetLiteralType();
 
-        return new LiteralExpression(token);
+        if (literalType == LiteralType.None)
+            throw new ParseDetailedException("le token actuel n'est pas reconnu comme étant un litéral valide.", token.Loc);
+
+        return new LiteralExpression(literalType);
     }
 
     private VarRefExpression ParseVarRefExpression()
@@ -298,7 +357,7 @@ public class Parser
 
         if (token.Type != expectedType)
         {
-            throw new ParseDetailedException(errorMessage, token.Location);
+            throw new ParseDetailedException(errorMessage, token.Loc);
         }
 
         return token;
@@ -322,14 +381,14 @@ public class Parser
 
     private Token NextToken()
     {
-        Token token = _tokens[Position++];
+        Token token = Context.Tokens![Position++];
         return token;
     }
 
     private Token Peek(int offset)
     {
-        int pos = Math.Min(Position + offset, _tokens.Count - 1);
-        return _tokens[pos];
+        int pos = Math.Min(Position + offset, Context.Tokens!.Count - 1);
+        return Context.Tokens![pos];
     }
 }
 

@@ -2,7 +2,7 @@ namespace Marshal.Compiler.Syntax;
 
 public class Token
 {
-    public Location Location { get; }
+    public Location Loc { get; }
     public string Value { get; }
     public TokenType Type { get; }
 
@@ -10,6 +10,6 @@ public class Token
     {
         Type = type;
         Value = value;
-        Location = location;
+        Loc = location;
     }
 }

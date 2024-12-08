@@ -1,31 +1,16 @@
-using Marshal.Compiler.Semantics;
+using Marshal.Compiler.Types;
 
 namespace Marshal.Compiler.Syntax;
 
 public class SyntaxFuncDeclParam
 {
-    public string Name => NameIdentifier.Value;
+    public Token NameToken { get; }
 
-    public TypeSymbol? ParamType { get; set; }
+    public MarshalType Type { get; }
 
-    public Token TypeIdentifier { get; }
-
-    public Token NameIdentifier { get; }
-
-    public Token? ParamsToken { get; }
-
-    public bool IsParams => ParamsToken != null;
-
-    public SyntaxFuncDeclParam(Token paramsToken)
+    public SyntaxFuncDeclParam(MarshalType syntaxType, Token nameIdentifier)
     {
-        TypeIdentifier = null!;
-        NameIdentifier = null!;
-        ParamsToken = paramsToken;
-    }
-
-    public SyntaxFuncDeclParam(Token typeIdentifier, Token nameIdentifier)
-    {
-        TypeIdentifier = typeIdentifier;
-        NameIdentifier = nameIdentifier;
+        Type = syntaxType;
+        NameToken = nameIdentifier;
     }
 }

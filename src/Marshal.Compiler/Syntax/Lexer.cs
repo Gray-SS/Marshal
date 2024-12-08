@@ -3,37 +3,37 @@ using Marshal.Compiler.Syntax;
 
 namespace Marshal.Compiler;
 
-public class Lexer
+public class Lexer : CompilerPass
 {
-    public CompilationContext Context { get; }
     public int Position { get; private set; }
     public char CurrentChar => Peek(0);
-    private Location CurrentLoc => new(_column, _line, Context.Source.RelativePath);
+    private Location CurrentLoc => new(_column, _line, Context.RelativePath);
 
     private int _line;
     private int _column;
-    private readonly ErrorHandler _errorHandler;
 
-    public Lexer(CompilationContext ctx, ErrorHandler errorHandler)
+    public Lexer(CompilationContext source, ErrorHandler errorHandler) : base(source, errorHandler)
     {
-        Context = ctx;
-
         _line = 1;
         _column = 1;
-        _errorHandler = errorHandler;
     }
 
-    public List<Token> Tokenize()
+    public override void Apply()
+    {
+        Context.Tokens = Tokenize();
+    }
+
+    private List<Token> Tokenize()
     {
         var tokens = new List<Token>();
 
         int cycles = 0;
 
-        while (Position < Context.Source.Content.Length)
+        while (Position < Context.Content.Length)
         {
             int pos = Position;
 
-            while (Position < Context.Source.Content.Length && char.IsWhiteSpace(CurrentChar))
+            while (Position < Context.Content.Length && char.IsWhiteSpace(CurrentChar))
             {
                 if (CurrentChar == '\n')
                 {
@@ -71,7 +71,7 @@ public class Lexer
             if (char.IsLetter(CurrentChar))
             {
                 int length = ReadWhile(char.IsLetterOrDigit);
-                ReadOnlySpan<char> span = Context.Source.Content.AsSpan().Slice(Position, length);
+                ReadOnlySpan<char> span = Context.Content.AsSpan().Slice(Position, length);
                 
                 TokenType type = span switch
                 {
@@ -100,14 +100,16 @@ public class Lexer
                 case ')': tokens.Add(ReadToken(TokenType.CloseBracket, 1)); break;
                 case '{': tokens.Add(ReadToken(TokenType.OpenCurlyBracket, 1)); break;
                 case '}': tokens.Add(ReadToken(TokenType.CloseCurlyBracket, 1)); break;
+                case '[': tokens.Add(ReadToken(TokenType.OpenSquareBracket, 1)); break;
+                case ']': tokens.Add(ReadToken(TokenType.CloseSquareBracket, 1)); break;
                 case ':': tokens.Add(ReadToken(TokenType.Colon, 1)); break;
                 case ',': tokens.Add(ReadToken(TokenType.Comma, 1)); break;
                 case '\0': 
-                    _errorHandler.ReportDetailed(ErrorType.Warning, $"le caractère de fin de fichier a été trouvé avant la fin du fichier.", CurrentLoc);
+                    ReportDetailed(ErrorType.Warning, $"le caractère de fin de fichier a été trouvé avant la fin du fichier.", CurrentLoc);
                     tokens.Add(ReadToken(TokenType.EOF, 0));
                     return tokens; 
                 default:
-                    _errorHandler.ReportDetailed(ErrorType.SyntaxError, $"le caractère '{CurrentChar}' n'est pas supporté.", CurrentLoc);
+                    ReportDetailed(ErrorType.SyntaxError, $"le caractère '{CurrentChar}' n'est pas supporté.", CurrentLoc);
                     tokens.Add(ReadToken(TokenType.Invalid, 1)); 
                     break;
             }
@@ -116,7 +118,7 @@ public class Lexer
             {
                 cycles++;
                 if (cycles >= 5) {
-                    _errorHandler.Report(ErrorType.InternalError, "une boucle infinie a été détéctée.");
+                    Report(ErrorType.InternalError, "une boucle infinie a été détéctée.");
                     break;
                 }
             }
@@ -140,7 +142,7 @@ public class Lexer
         int start = Position;
         Position += length;
 
-        string value = Context.Source.Content.Substring(start, length);
+        string value = Context.Content.Substring(start, length);
         var token = new Token(type, value, CurrentLoc);
 
         _column += length;
@@ -150,9 +152,9 @@ public class Lexer
     private char Peek(int offset)
     {
         int pos = Position + offset;
-        if (pos >= Context.Source.Content.Length)
+        if (pos >= Context.Content.Length)
             return '\0';
 
-        return Context.Source.Content[pos];
+        return Context.Content[pos];
     }
 }

@@ -1,15 +1,22 @@
 namespace Marshal.Compiler.Syntax.Expressions;
 
+public enum LiteralType
+{
+    None,
+    Int,
+    String,
+}
+
 public class LiteralExpression : SyntaxExpression
 {
-    public Token LiteralToken { get; }
+    public LiteralType LiteralType { get; }
 
-    public LiteralExpression(Token literalToken)
+    public LiteralExpression(LiteralType literalType)
     {
-        LiteralToken = literalToken;
+        LiteralType = literalType;
     }
 
-    public override void Accept(IVisitor visitor)
+    public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
     }

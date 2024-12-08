@@ -11,6 +11,8 @@ public enum TokenType : byte
     CloseBracket,
     OpenCurlyBracket,
     CloseCurlyBracket,
+    OpenSquareBracket,
+    CloseSquareBracket,
     Colon,
 
     // Keywords

@@ -1,7 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Diagnostics.Contracts;
-using System.Reflection.Metadata;
-using Swigged.LLVM;
+using Marshal.Compiler.Types;
 
 namespace Marshal.Compiler.Semantics;
 
@@ -9,7 +7,8 @@ public enum SymbolType
 {
     Function,
     Variable,
-    CustomType,
+    Type,
+    Param,
 }
 
 public abstract class Symbol : IEquatable<Symbol>
@@ -17,13 +16,12 @@ public abstract class Symbol : IEquatable<Symbol>
     public string Name { get; }
     public abstract SymbolType Type { get; }
 
-    public static readonly TypeSymbol Byte = TypeSymbol.CreatePrimitive("byte", LLVM.Int8Type());
-    public static readonly TypeSymbol Short = TypeSymbol.CreatePrimitive("short", LLVM.Int16Type());
-    public static readonly TypeSymbol Int = TypeSymbol.CreatePrimitive("int", LLVM.Int32Type());
-    public static readonly TypeSymbol Long = TypeSymbol.CreatePrimitive("long", LLVM.Int64Type());
-    public static readonly TypeSymbol Char = TypeSymbol.CreatePrimitive("char", LLVM.Int8Type());
-    public static readonly TypeSymbol Void = TypeSymbol.CreatePrimitive("void", LLVM.VoidType());
-    public static readonly TypeSymbol String = TypeSymbol.CreatePrimitive("string", LLVM.PointerType(LLVM.Int8Type(), 0));
+    public static readonly TypeSymbol Byte = new("byte");
+    public static readonly TypeSymbol Short = new("short");
+    public static readonly TypeSymbol Int = new("int");
+    public static readonly TypeSymbol Long = new("long");
+    public static readonly TypeSymbol Char = new("char");
+    public static readonly TypeSymbol Void = new("void");
 
     public Symbol(string name)
     {
@@ -63,43 +61,21 @@ public abstract class Symbol : IEquatable<Symbol>
         => !(a == b);
 }
 
-public class ParamSymbol
-{
-    public string Name { get; }
-    public TypeSymbol Type { get; }
-
-    public bool IsParams { get; }
-
-    public ParamSymbol(bool isParams)
-    {
-        Name = null!;
-        Type = null!;
-        IsParams = isParams;
-    }
-
-    public ParamSymbol(string name, TypeSymbol type)
-    {
-        Name = name;
-        Type = type;
-    }
-}
-
 public class FunctionSymbol : Symbol
 {
-    public TypeSymbol ReturnType { get; }
+    public List<VariableSymbol> Params { get; }
+    public MarshalType ReturnType { get; set; } = null!;
 
     public bool IsExtern { get; }
 
     public bool IsDefined { get; }
 
-    public List<ParamSymbol> Params { get; }
 
     public override SymbolType Type => SymbolType.Function;
 
-    public FunctionSymbol(string name, TypeSymbol returnType, bool isExtern, bool isDefined, List<ParamSymbol> parameters) : base(name)
+    public FunctionSymbol(string name, bool isExtern, bool isDefined, List<VariableSymbol> parameters) : base(name)
     {
         IsExtern = isExtern;
-        ReturnType = returnType;
         IsDefined = isDefined;
         Params = parameters;
     }
@@ -108,66 +84,21 @@ public class FunctionSymbol : Symbol
 public class VariableSymbol : Symbol
 {
     public bool IsInitialized { get; set; }
-    public TypeSymbol VariableType { get; }
+    public MarshalType DataType { get; set; } = null!;
 
     public override SymbolType Type => SymbolType.Variable;
 
-    public VariableSymbol(string name, TypeSymbol varType, bool init) : base(name)
+    public VariableSymbol(string name, bool init) : base(name)
     {
         IsInitialized = init;
-        VariableType = varType;
     }
 }
 
 public class TypeSymbol : Symbol
 {
-    public bool IsPrimitive { get; }
+    public override SymbolType Type => SymbolType.Type;
 
-    public bool IsArray { get; }
-
-    public TypeRef? LLVMType { get; }
-
-    public TypeSymbol? ElementType { get; }
-
-    public int? ArraySize { get; }
-
-    public override SymbolType Type => SymbolType.CustomType;
-
-    private TypeSymbol(string name, TypeRef? llvmType, bool isPrimitive, bool isArray = false, TypeSymbol? elementType = null, int? arraySize = null) 
-        : base(name)
+    public TypeSymbol(string name) : base(name)
     {
-        LLVMType = llvmType;
-        IsPrimitive = isPrimitive;
-        IsArray = isArray;
-        ElementType = elementType;
-        ArraySize = arraySize;
-    }
-
-public static TypeSymbol CreateCustom(string name)
-    {
-        return new TypeSymbol(name, null, false);
-    }
-
-    public static TypeSymbol CreatePrimitive(string name, TypeRef llvmType)
-    {
-        return new TypeSymbol(name, llvmType, true);
-    }
-
-    public static TypeSymbol CreateArray(TypeSymbol elementType, int? arraySize = null)
-    {
-        if (elementType.IsArray)
-        {
-            throw new InvalidOperationException("Nested arrays are not supported.");
-        }
-
-        var llvmType = arraySize.HasValue
-            ? LLVM.ArrayType(elementType.LLVMType!.Value, (uint)arraySize.Value)
-            : LLVM.PointerType(elementType.LLVMType!.Value, 0);
-
-        var name = arraySize.HasValue 
-            ? $"{elementType.Name}[{arraySize.Value}]"
-            : $"{elementType.Name}[]";
-
-        return new TypeSymbol(name, llvmType, false, true, elementType, arraySize);
     }
 }

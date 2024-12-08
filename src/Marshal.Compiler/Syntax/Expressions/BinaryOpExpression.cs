@@ -23,7 +23,7 @@ public sealed class BinaryOpExpression : SyntaxExpression
         OpType = opType;
     }
 
-    public override void Accept(IVisitor visitor)
+    public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
     }

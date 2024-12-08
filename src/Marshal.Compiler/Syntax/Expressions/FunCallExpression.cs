@@ -1,18 +1,22 @@
+using Marshal.Compiler.Semantics;
+
 namespace Marshal.Compiler.Syntax.Expressions;
 
 public class FunCallExpression : SyntaxExpression
 {
-    public Token NameIdentifier { get; }
+    public Token NameToken { get; }
 
     public List<SyntaxExpression> Parameters { get; }
+
+    public FunctionSymbol Symbol { get; set; } = null!;
 
     public FunCallExpression(Token nameIdentifier, List<SyntaxExpression> parameters)
     {
         Parameters = parameters;
-        NameIdentifier = nameIdentifier;
+        NameToken = nameIdentifier;
     }
 
-    public override void Accept(IVisitor visitor)
+    public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
     }

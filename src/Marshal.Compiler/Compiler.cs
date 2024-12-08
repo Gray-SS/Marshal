@@ -1,10 +1,9 @@
-using Swigged.LLVM;
 using System.Diagnostics;
-using Marshal.Compiler.CodeGen;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Semantics;
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Utilities;
+// using Marshal.Compiler.Emit;
 
 namespace Marshal.Compiler;
 
@@ -22,7 +21,6 @@ public class Compiler
         GlobalTable = new SymbolTable();
         GlobalTable.AddSymbol(Symbol.Byte);
         GlobalTable.AddSymbol(Symbol.Short);
-        GlobalTable.AddSymbol(Symbol.String);
         GlobalTable.AddSymbol(Symbol.Int);
         GlobalTable.AddSymbol(Symbol.Long);
         GlobalTable.AddSymbol(Symbol.Char);
@@ -53,10 +51,10 @@ public class Compiler
 
             if (success)
             {
-                CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.Output}");
+                // CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.Output}");
 
-                foreach (var obj in objs)
-                    File.Delete(obj);
+                // foreach (var obj in objs)
+                //     File.Delete(obj);
             }
 
             sw.Stop();
@@ -80,7 +78,7 @@ public class Compiler
 
         if (string.IsNullOrEmpty(relativePath))
         {
-            _errorHandler.Report(ErrorType.Fatal, $"un fichier source a été vide");
+            _errorHandler.Report(ErrorType.Fatal, $"le nom des fichiers sources ne peuvent pas être vide");
             return false;   
         }
 
@@ -90,48 +88,23 @@ public class Compiler
             return false;
         }
 
-        var sourceFile = new SourceFile(relativePath);
-        var ctx = new CompilationContext(sourceFile);
+        var context = new CompilationContext(relativePath, GlobalTable);
+        var passes = new List<CompilerPass>() 
+        {
+            new Lexer(context, _errorHandler),
+            new Parser(context, _errorHandler),
+            new SymbolTableBuilder(context, _errorHandler),
+            new TypeChecker(context, _errorHandler),
+            // new ObjectEmitter(context, _errorHandler),
+        };
 
-        var lexer = new Lexer(ctx, _errorHandler);
-        var tokens = lexer.Tokenize();
+        foreach (CompilerPass pass in passes)
+        {
+            pass.Apply();
 
-        // Console.WriteLine(string.Join('\n', tokens.Select(x => $"[{x.Type}:{x.Value}]")));
-
-        if (_errorHandler.HasError) return false;
-
-        var parser = new Parser(tokens, ctx, _errorHandler);
-        var ast = parser.ParseProgram();
-
-        if (_errorHandler.HasError) return false;
-
-        var semanticAnalyzer = new SemanticAnalyzer(GlobalTable, _errorHandler);
-        semanticAnalyzer.Visit(ast);
-
-        if (_errorHandler.HasError) return false;
-
-        var module = LLVM.ModuleCreateWithName(ctx.Source.FullPath);
-
-        var codeGen = new CodeGenerator(module);
-        codeGen.Visit(ast);
-
-        if (_errorHandler.HasError) return false;
-
-        string llvmFile = $"{Path.Combine(Path.GetDirectoryName(ctx.Source.RelativePath)!, Path.GetFileNameWithoutExtension(ctx.Source.RelativePath))}.mo";
-
-        var errorMsg = new MyString();
-        LLVM.DumpModule(module);
-
-        LLVM.VerifyModule(module, VerifierFailureAction.AbortProcessAction, errorMsg);
-        LLVM.WriteBitcodeToFile(module, llvmFile);
-
-        string fileObj = $"{Path.Combine(Path.GetDirectoryName(ctx.Source.RelativePath)!, Path.GetFileNameWithoutExtension(ctx.Source.RelativePath))}.o";
-
-        if (!CommandExecutor.ExecuteCommand($"llc {llvmFile} -filetype=obj -o {fileObj}"))
-            return false;
-        
-        objFile = fileObj;
-        File.Delete(llvmFile);
+            if (_errorHandler.HasError)
+                return false;
+        }
 
         return true;
     }

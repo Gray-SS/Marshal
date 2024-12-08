@@ -9,7 +9,7 @@ public class ScopeStatement : SyntaxStatement
         Statements = statements;
     }
 
-    public override void Accept(IVisitor visitor)
+    public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
     }

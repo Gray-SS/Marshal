@@ -83,7 +83,7 @@ public class SymbolTable
 
     public TypeSymbol GetType(string name)
     {
-        var symbol = GetSymbol(name, SymbolType.CustomType) ?? Symbol.Void;
+        var symbol = GetSymbol(name, SymbolType.Type) ?? Symbol.Void;
         return (TypeSymbol)symbol;
     }
 
@@ -120,7 +120,7 @@ public class SymbolTable
 
     public bool TryGetType(string name, [NotNullWhen(true)] out TypeSymbol? type)
     {
-        type = GetSymbol(name, SymbolType.CustomType) as TypeSymbol;
+        type = GetSymbol(name, SymbolType.Type) as TypeSymbol;
         return type != null;
     }
 

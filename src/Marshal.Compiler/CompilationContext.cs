@@ -1,11 +1,25 @@
+using Marshal.Compiler.Errors;
+using Marshal.Compiler.Semantics;
+using Marshal.Compiler.Syntax;
+
 namespace Marshal.Compiler;
 
-public class CompilationContext 
+public class CompilationContext
 {
-    public SourceFile Source { get; }
+    public string FullPath { get; }
+    public string RelativePath { get; }
+    public string Content { get; }
 
-    public CompilationContext(SourceFile sourceFile)
+    public List<Token> Tokens { get; set; } = null!;
+    public CompilationUnit AST { get; set; } = null!;
+    public SymbolTable SymbolTable { get; set; } = null!;
+    public string ObjFilePath { get; set; } = null!;
+
+    public CompilationContext(string relativePath, SymbolTable globalTable)
     {
-        Source = sourceFile;
+        SymbolTable = globalTable;
+        RelativePath = relativePath;
+        FullPath = Path.GetFullPath(relativePath);
+        Content = File.ReadAllText(relativePath);
     }
 }

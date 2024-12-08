@@ -1,27 +1,26 @@
 using Marshal.Compiler.Semantics;
+using Marshal.Compiler.Types;
 
 namespace Marshal.Compiler.Syntax.Statements;
 
 public class VarDeclStatement : SyntaxStatement
 {
-    public string VarName => NameIdentifier.Value;
+    public Token NameToken { get; }
+    public string VarName => NameToken.Value;
 
-    public TypeSymbol? VarType { get; set; }
+    public MarshalType VarType { get; }
+    public SyntaxExpression? Initializer { get; }
 
-    public Token NameIdentifier { get; }
+    public VariableSymbol Symbol { get; set; } = null!;
 
-    public Token TypeIdentifier { get; }
-
-    public SyntaxExpression? InitExpression { get; }
-
-    public VarDeclStatement(Token nameIdentifier, Token typeIdentifier, SyntaxExpression? initExpression)
+    public VarDeclStatement(Token nameIdentifier, MarshalType varType, SyntaxExpression? initExpression)
     {
-        NameIdentifier = nameIdentifier;
-        TypeIdentifier = typeIdentifier;
-        InitExpression = initExpression;
+        VarType = varType;
+        NameToken = nameIdentifier;
+        Initializer = initExpression;
     }
 
-    public override void Accept(IVisitor visitor)
+    public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
     }
