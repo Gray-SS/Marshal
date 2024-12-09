@@ -6,6 +6,7 @@ public enum LiteralType
     Int,
     String,
     Boolean,
+    Char,
 }
 
 public class LiteralExpression : SyntaxExpression

@@ -59,20 +59,28 @@ public class Lexer : CompilerPass
                 continue;
             }
 
+            if (CurrentChar == '\'' && Peek(1) != '\0' && Peek(2) == '\'')
+            {
+                Advance(1);
+                tokens.Add(ReadToken(TokenType.CharLiteral, 1));
+                Advance(1);
+                continue;
+            }
+
             if (CurrentChar == '"')
             {
-                Position++;
+                Advance(1);
                 int length = ReadWhile((c) => c != '"');
 
                 if (length == -1)
                 {
                     ReportDetailed(ErrorType.SyntaxError, "le string ne se termine jamais.", CurrentLoc);
-                    Position++;
+                    Advance(1);
                     continue;
                 }
 
                 tokens.Add(ReadToken(TokenType.StringLiteral, length));
-                Position++;
+                Advance(1);
                 continue;
             }
 
@@ -151,15 +159,36 @@ public class Lexer : CompilerPass
         return length;
     }
 
+    private void Advance(int length)
+    {
+        for (int i = 0; i < length; i++)
+        {
+            if (Position < Context.Content.Length)
+            {
+                if (Context.Content[Position] == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
+                else
+                {
+                    _column++;
+                }
+                Position++;
+            }
+        }
+    }
+
     private Token ReadToken(TokenType type, int length)
     {
         int start = Position;
-        Position += length;
+        var cloc = CurrentLoc;
+
+        Advance(length);
 
         string value = Context.Content.Substring(start, length);
-        var token = new Token(type, value, CurrentLoc);
+        var token = new Token(type, value, cloc);
 
-        _column += length;
         return token;
     }
 

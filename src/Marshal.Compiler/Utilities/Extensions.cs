@@ -12,6 +12,7 @@ public static class Extensions
         {
             TokenType.StringLiteral => LiteralType.String,
             TokenType.IntLiteral => LiteralType.Int,
+            TokenType.CharLiteral => LiteralType.Char,
             TokenType.FalseKeyword => LiteralType.Boolean,
             TokenType.TrueKeyword => LiteralType.Boolean,
 

@@ -179,13 +179,19 @@ public class IRGenerator : CompilerPass, IASTVisitor
             case LiteralType.Boolean:
             {
                 int n = expr.Token.Value == "true" ? 1 : 0;
-                _valueStack.Push(LLVM.ConstInt(LLVM.Int32Type(), (ulong)n, false));
+                _valueStack.Push(LLVM.ConstInt(LLVM.Int1Type(), (ulong)n, false));
             } break;
 
             case LiteralType.String:
             {
                 string str = expr.Token.Value;
                 _valueStack.Push(LLVM.BuildGlobalStringPtr(_builder, str, GetGlobalStrName()));
+            } break;
+
+            case LiteralType.Char:
+            {
+                int n = expr.Token.Value[0];
+                _valueStack.Push(LLVM.ConstInt(LLVM.Int8Type(), (ulong)n, false));
             } break;
         }
     }

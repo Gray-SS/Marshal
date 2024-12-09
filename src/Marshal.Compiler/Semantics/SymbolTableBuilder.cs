@@ -239,6 +239,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             LiteralType.Int => MarshalType.Int,
             LiteralType.String => MarshalType.String,
             LiteralType.Boolean => MarshalType.Boolean,
+            LiteralType.Char => MarshalType.Char,
             _ => throw new NotImplementedException()
         };
     }
