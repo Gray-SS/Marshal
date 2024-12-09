@@ -123,7 +123,6 @@ public class Lexer : CompilerPass
                 case ':': tokens.Add(ReadToken(TokenType.Colon, 1)); break;
                 case ',': tokens.Add(ReadToken(TokenType.Comma, 1)); break;
                 case '\0': 
-                    ReportDetailed(ErrorType.Warning, $"le caractère de fin de fichier a été trouvé avant la fin du fichier.", CurrentLoc);
                     tokens.Add(ReadToken(TokenType.EOF, 0));
                     return tokens; 
                 default:

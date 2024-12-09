@@ -244,9 +244,27 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         };
     }
 
+    public void Visit(ArrayAccessExpression expr)
+    {
+        expr.ArrayExpr.Accept(this);
+        expr.IndexExpr.Accept(this);
+
+        if (!expr.ArrayExpr.Type.IsIndexable)
+            throw new CompilerException(ErrorType.SemanticError, "vous essayez d'indexer un type qui n'est pas indexable.");
+
+        if (expr.IndexExpr.Type != MarshalType.Int)
+            throw new CompilerException(ErrorType.SemanticError, $"l'index doit obligatoirement être de type '{MarshalType.Int.Name}' mais un type '{expr.IndexExpr.Type.Name}' a été reçu.");
+
+        if (expr.ArrayExpr.Type is ArrayType arrayType)
+            expr.Type = arrayType.ElementType;
+        else if (expr.ArrayExpr.Type is PointerType pointerType)
+            expr.Type = pointerType.Pointee;
+        else
+            throw new NotImplementedException();
+    }
+
     public void Visit(ArrayInitExpression expr)
     {
-
     }
 
     private void DoVerifiedBlock(Action action)

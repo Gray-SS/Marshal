@@ -1,15 +1,10 @@
-func extern puts(char* ptr): int;
-
-func test(int a): int;
+func extern putchar(char c): int;
 
 func main(): int {
-    var b: int = test(10);
+    var arr: char* = "ABCDEFG";
+    arr = "Hello World !";
 
-    puts("Hello World !");
+    putchar(arr[2]);
+
     return 0;
-}
-
-func test(int a): int
-{
-    return a;
 }

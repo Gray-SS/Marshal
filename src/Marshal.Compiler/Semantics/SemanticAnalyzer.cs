@@ -108,9 +108,12 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
     }
 
+    public void Visit(ArrayAccessExpression expr)
+    {
+    }
+
     public void Visit(ArrayInitExpression expr)
     {
-        
     }
 
     private void AnalyzeFunctionCall(FunctionSymbol function, List<SyntaxExpression> args, Location functionLoc)

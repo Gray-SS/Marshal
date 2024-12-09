@@ -103,8 +103,11 @@ public enum MarshalTypeKind
 public abstract class MarshalType : Symbol
 {
     public int SizeInBytes { get; }
+    public bool IsIndexable => IsArray || IsPointer;
     public virtual bool IsNumeric => false;
     public virtual bool IsBoolean => false;
+    public virtual bool IsArray => false;
+    public virtual bool IsPointer => false;
 
     public abstract MarshalTypeKind Kind { get; }
     public abstract PrimitiveType Base { get; }
@@ -151,9 +154,11 @@ public class PrimitiveType : MarshalType
 public class PointerType : MarshalType
 {
     public MarshalType Pointee { get; }
+    public override bool IsPointer => true;
 
     public override MarshalTypeKind Kind => MarshalTypeKind.Pointer;
     public override PrimitiveType Base => Pointee.Base;
+
 
     public PointerType(MarshalType pointee) : base($"{pointee.Name} *", Long.SizeInBytes)
     {
@@ -165,6 +170,7 @@ public class ArrayType : MarshalType
 {
     public int ElementCount { get; }
     public MarshalType ElementType { get; }
+    public override bool IsArray => true;
 
     public override MarshalTypeKind Kind => MarshalTypeKind.Array;
     public override PrimitiveType Base => ElementType.Base;

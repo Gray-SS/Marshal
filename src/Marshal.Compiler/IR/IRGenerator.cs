@@ -4,12 +4,13 @@ using Marshal.Compiler.Syntax.Expressions;
 using Marshal.Compiler.Syntax.Statements;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Semantics;
-using Marshal.Compiler.Utilities;
 
 namespace Marshal.Compiler.IR;
 
 public class IRGenerator : CompilerPass, IASTVisitor
 {
+    private static ValueRef ZeroInt = LLVM.ConstInt(LLVM.Int32Type(), 0, false);
+
     private int _globalStrCount;
     private ModuleRef _module;
     private BuilderRef _builder;
@@ -57,6 +58,32 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(AssignmentStatement stmt)
     {
+        VariableSymbol variable = stmt.Symbol;
+
+        stmt.Initializer.Accept(this);
+        TypeRef varType = _typeResolver.Resolve(variable.DataType);
+        ValueRef varPtr = LLVM.BuildAlloca(_builder, varType, variable.Name);
+
+        ValueRef initializeValue = _valueStack.Pop();
+
+        if (LLVM.GetTypeKind(LLVM.TypeOf(initializeValue)) == TypeKind.ArrayTypeKind &&
+            LLVM.GetTypeKind(varType) == TypeKind.PointerTypeKind)
+        {
+            ValueRef arrayBaseAddress = LLVM.BuildGEP(
+                _builder,
+                initializeValue,
+                [ ZeroInt, ZeroInt ],
+                "array_ptr"
+            );
+
+            _namedValues[variable.Name] = varPtr;
+            LLVM.BuildStore(_builder, arrayBaseAddress, varPtr);
+        }
+        else
+        {
+            _namedValues[variable.Name] = varPtr;
+            LLVM.BuildStore(_builder, initializeValue, varPtr);
+        }
     }
 
     public void Visit(FunCallStatement stmt)
@@ -119,20 +146,19 @@ public class IRGenerator : CompilerPass, IASTVisitor
             if (LLVM.GetTypeKind(LLVM.TypeOf(initializeValue)) == TypeKind.ArrayTypeKind &&
                 LLVM.GetTypeKind(varType) == TypeKind.PointerTypeKind)
             {
-                ValueRef zeroIndex = LLVM.ConstInt(LLVM.Int32Type(), 0, false);
                 ValueRef arrayBaseAddress = LLVM.BuildGEP(
                     _builder,
                     initializeValue,
-                    [ zeroIndex, zeroIndex ],
+                    [ ZeroInt, ZeroInt ],
                     "array_ptr"
                 );
 
-                Console.WriteLine($"{variable.Name}");
+                _namedValues[variable.Name] = varPtr;
                 LLVM.BuildStore(_builder, arrayBaseAddress, varPtr);
             }
             else
             {
-                Console.WriteLine($"{variable.Name}");
+                _namedValues[variable.Name] = varPtr;
                 LLVM.BuildStore(_builder, initializeValue, varPtr);
             }
         }
@@ -207,6 +233,30 @@ public class IRGenerator : CompilerPass, IASTVisitor
             _valueStack.Push(loadedValue);
         }
         else _valueStack.Push(varValue);
+    }
+
+    public void Visit(ArrayAccessExpression expr)
+    {
+        expr.ArrayExpr.Accept(this);
+        ValueRef indexorPtr = _valueStack.Pop();
+
+        expr.IndexExpr.Accept(this);
+        ValueRef indexValue = _valueStack.Pop();
+
+        if (LLVM.GetTypeKind(LLVM.TypeOf(indexorPtr)) == TypeKind.ArrayTypeKind)
+        {
+            ValueRef elementPointer = LLVM.BuildGEP(_builder, indexorPtr, [ ZeroInt, indexValue ], "arr_iptr");
+            ValueRef indexorValue = LLVM.BuildLoad(_builder, elementPointer, "arr_ival");
+
+            _valueStack.Push(indexorValue);
+        }
+        else if (LLVM.GetTypeKind(LLVM.TypeOf(indexorPtr)) == TypeKind.PointerTypeKind)
+        {
+            ValueRef elementPointer = LLVM.BuildGEP(_builder, indexorPtr, [ indexValue ], "ptr_iptr");
+            ValueRef pointedValue = LLVM.BuildLoad(_builder, elementPointer, "ptr_ival");
+
+            _valueStack.Push(pointedValue);
+        }
     }
 
     public void Visit(ArrayInitExpression expr)

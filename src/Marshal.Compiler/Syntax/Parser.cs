@@ -221,10 +221,24 @@ public class Parser : CompilerPass
 
     private SyntaxExpression ParseExpression()
     {
-        if (CurrentToken.Type == TokenType.OpenCurlyBracket) 
-            return ParseArrayExpression();
+        SyntaxExpression expr;
 
-        return ParseBinOpExpression();
+        if (CurrentToken.Type == TokenType.OpenCurlyBracket) 
+            expr = ParseArrayExpression();
+        else
+            expr = ParseBinOpExpression();
+
+        if (Peek(0).Type == TokenType.OpenSquareBracket)
+        {
+            //Parse an array access expression
+            NextToken();
+            SyntaxExpression indexExpr = ParseExpression();
+            Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'index de l'accès au tableau.");
+
+            expr = new ArrayAccessExpression(expr, indexExpr);
+        }
+
+        return expr;
     }
 
     private ArrayInitExpression ParseArrayExpression()
@@ -297,7 +311,6 @@ public class Parser : CompilerPass
             _ => 0
         };
     }
-
 
     private SyntaxExpression ParsePrimaryExpression()
     {
