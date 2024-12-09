@@ -63,6 +63,14 @@ public class Lexer : CompilerPass
             {
                 Position++;
                 int length = ReadWhile((c) => c != '"');
+
+                if (length == -1)
+                {
+                    ReportDetailed(ErrorType.SyntaxError, "le string ne se termine jamais.", CurrentLoc);
+                    Position++;
+                    continue;
+                }
+
                 tokens.Add(ReadToken(TokenType.StringLiteral, length));
                 Position++;
                 continue;
@@ -81,6 +89,8 @@ public class Lexer : CompilerPass
                     "return" => TokenType.ReturnKeyword,
                     "extern" => TokenType.ExternKeyword,
                     "params" => TokenType.ParamsKeyword,
+                    "true" => TokenType.TrueKeyword,
+                    "false" => TokenType.FalseKeyword,
                     _ => TokenType.Identifier
                 };
 
@@ -132,8 +142,12 @@ public class Lexer : CompilerPass
     private int ReadWhile(Predicate<char> predicate)
     {
         int length = 0;
-        while (predicate.Invoke(Peek(length)))
+        while (predicate.Invoke(Peek(length)) && Peek(length) != '\0')
             length++;
+
+        if (Peek(length) == '\0')
+            return -1;
+
         return length;
     }
 

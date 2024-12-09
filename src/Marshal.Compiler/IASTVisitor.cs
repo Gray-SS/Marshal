@@ -16,11 +16,12 @@ public interface IASTVisitor
 
     void Visit(FuncDeclStatement stmt);
 
-    void Visit(BinaryOpExpression stmt);
 
     void Visit(ReturnStatement stmt);
 
     void Visit(VarDeclStatement stmt);
+    
+    void Visit(BinaryOpExpression expr);
 
     void Visit(FunCallExpression expr);
 

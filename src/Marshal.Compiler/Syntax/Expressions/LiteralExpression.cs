@@ -5,14 +5,17 @@ public enum LiteralType
     None,
     Int,
     String,
+    Boolean,
 }
 
 public class LiteralExpression : SyntaxExpression
 {
+    public Token Token { get; }
     public LiteralType LiteralType { get; }
 
-    public LiteralExpression(LiteralType literalType)
+    public LiteralExpression(Token token, LiteralType literalType)
     {
+        Token = token;
         LiteralType = literalType;
     }
 

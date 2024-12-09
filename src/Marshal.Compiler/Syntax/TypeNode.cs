@@ -1,45 +1,51 @@
 namespace Marshal.Compiler.Syntax;
 
-public abstract class TypeNode
+public abstract class SyntaxTypeNode
 {
-    public abstract string BaseTypeName { get; }
+    public string Name => NameToken.Value;
+
+    public Location Location => NameToken.Loc;
+
+    public abstract Token NameToken { get; }
+
+    public abstract SyntaxTypeNode BaseType { get; }
 }
 
-public class BaseTypeNode : TypeNode
+public class SyntaxPrimitiveType : SyntaxTypeNode
 {
-    public string Name => Identifier.Value;
+    public override Token NameToken { get; }
+    public override SyntaxTypeNode BaseType { get; }
 
-    public override string BaseTypeName => Name;
-
-    public Token Identifier { get; }
-    
-    public BaseTypeNode(Token identifier)
+    public SyntaxPrimitiveType(Token nameToken)
     {
-        Identifier = identifier;
+        BaseType = this;
+        NameToken = nameToken;
     }
 }
 
-public class PointerTypeNode : TypeNode
+public class SyntaxPointerType : SyntaxTypeNode
 {
-    public TypeNode Pointee { get; }
+    public SyntaxTypeNode Pointee { get; }
 
-    public override string BaseTypeName => Pointee.BaseTypeName;
+    public override Token NameToken => Pointee.NameToken;
+    public override SyntaxTypeNode BaseType => Pointee.BaseType;
 
-    public PointerTypeNode(TypeNode pointee)
+    public SyntaxPointerType(SyntaxTypeNode pointee)
     {
         Pointee = pointee;
     }
 }
 
-public class ArrayTypeNode : TypeNode
+public class SyntaxArrayType : SyntaxTypeNode
 {
-    public TypeNode ElementType { get; }
+    public SyntaxTypeNode ElementType { get; }
     
-    public Token? ElementCount { get; }
+    public int ElementCount { get; }
 
-    public override string BaseTypeName => ElementType.BaseTypeName;
+    public override Token NameToken => ElementType.NameToken;
+    public override SyntaxTypeNode BaseType => ElementType.BaseType;
 
-    public ArrayTypeNode(TypeNode elementType, Token? elementCount)
+    public SyntaxArrayType(SyntaxTypeNode elementType, int elementCount)
     {
         ElementType = elementType;
         ElementCount = elementCount;

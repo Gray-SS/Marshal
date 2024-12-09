@@ -1,7 +1,6 @@
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Syntax.Expressions;
 using Marshal.Compiler.Syntax.Statements;
-using Marshal.Compiler.Types;
 using Marshal.Compiler.Utilities;
 
 namespace Marshal.Compiler.Syntax;
@@ -30,9 +29,9 @@ public class Parser : CompilerPass
                 var statement = ParseStatement();
                 statements.Add(statement);
             }
-            catch (ParseException ex)
+            catch (CompilerException ex)
             {
-                if (ex is ParseDetailedException dex)
+                if (ex is CompilerDetailedException dex)
                     ReportDetailed(ErrorType.SyntaxError, ex.Message, dex.Location);
                 else
                     Report(ErrorType.SyntaxError, ex.Message);
@@ -59,7 +58,7 @@ public class Parser : CompilerPass
         else if (CurrentToken.Type == TokenType.OpenCurlyBracket)
             return ParseScopeStatement();
 
-        throw new ParseDetailedException($"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
+        throw new CompilerDetailedException(ErrorType.SyntaxError, $"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
     }
 
     private AssignmentStatement ParseAssignmentStatement()
@@ -88,13 +87,13 @@ public class Parser : CompilerPass
         
         Expect(TokenType.OpenBracket, "parenthèse ouvrante '(' attendue après le nom de la fonction.");
         
-        var parameters = new List<SyntaxFuncDeclParam>();
+        var parameters = new List<FuncParamDeclNode>();
         while (CurrentToken.Type != TokenType.EOF && 
                CurrentToken.Type != TokenType.CloseBracket)
         {
-            MarshalType pTypeId = ParseType("le type du paramètre est attendu.");
+            SyntaxTypeNode pTypeId = ParseType("le type du paramètre est attendu.");
             Token pNameId = Expect(TokenType.Identifier, "le nom de la variable est attendue.");
-            parameters.Add(new SyntaxFuncDeclParam(pTypeId, pNameId));
+            parameters.Add(new FuncParamDeclNode(pTypeId, pNameId));
 
             if (CurrentToken.Type == TokenType.Comma) NextToken();
             else break;
@@ -103,12 +102,12 @@ public class Parser : CompilerPass
         Expect(TokenType.CloseBracket, "parenthèse fermante ')' attendue après la liste des paramètres.");
 
         Expect(TokenType.Colon, "le type de retour de la fonction est attendu après les paramètre de la fonction.");
-        MarshalType returnType = ParseType("type de retour attendu après les deux-points.");
+        SyntaxTypeNode returnType = ParseType("type de retour attendu après les deux-points.");
 
         ScopeStatement? body = null;
         if (CurrentToken.Type != TokenType.SemiColon)
         {
-            body = ParseScopeStatement() ?? throw new ParseException("le corps de la fonction est vide ou incorrect.");
+            body = ParseScopeStatement() ?? throw new CompilerException(ErrorType.SyntaxError, "le corps de la fonction est vide ou incorrect.");
         }
         else NextToken();
 
@@ -121,7 +120,7 @@ public class Parser : CompilerPass
         Token nameIdentifier = Expect(TokenType.Identifier, "identifiant de la variable attendu après 'var'.");
 
         Expect(TokenType.Colon, "deux-points ':' attendu après l'identifiant de la variable.");
-        MarshalType type = ParseType("le type de la variable est attendu après les deux points ':'.");
+        SyntaxTypeNode type = ParseType("le type de la variable est attendu après les deux points ':'.");
 
         SyntaxExpression? initExpr = null;
         if (CurrentToken.Type == TokenType.Equal)
@@ -135,9 +134,9 @@ public class Parser : CompilerPass
         return new VarDeclStatement(nameIdentifier, type, initExpr);
     }
 
-    private MarshalType ParseType(string errorMessage)
+    private SyntaxTypeNode ParseType(string errorMessage)
     {
-        MarshalType type = ParsePrimitiveType(errorMessage);
+        SyntaxTypeNode type = ParsePrimitiveType(errorMessage);
         
         while (CurrentToken.Type == TokenType.Asterisk ||
                CurrentToken.Type == TokenType.OpenSquareBracket)
@@ -145,7 +144,7 @@ public class Parser : CompilerPass
             if (CurrentToken.Type == TokenType.Asterisk)
             {
                 NextToken();
-                type = new MarshalPointerType(type);
+                type = new SyntaxPointerType(type);
             }
             else if (CurrentToken.Type == TokenType.OpenSquareBracket)
             {
@@ -159,17 +158,17 @@ public class Parser : CompilerPass
                 }
 
                 Expect(TokenType.CloseSquareBracket, "un crochet de fermeture ']' est attendu après l'ouverture du crochet.");
-                type = new MarshalArrayType(type, length);
+                type = new SyntaxArrayType(type, length);
             }
         }
 
         return type;
     }
 
-    private MarshalPrimitiveType ParsePrimitiveType(string errorMessage)
+    private SyntaxTypeNode ParsePrimitiveType(string errorMessage)
     {
         Token identifier = Expect(TokenType.Identifier, errorMessage);
-        return new MarshalPrimitiveType(identifier.Value);
+        return new SyntaxPrimitiveType(identifier);
     }
 
     private FunCallStatement ParseFunCallStatement()
@@ -319,9 +318,9 @@ public class Parser : CompilerPass
         LiteralType literalType = token.GetLiteralType();
 
         if (literalType == LiteralType.None)
-            throw new ParseDetailedException("le token actuel n'est pas reconnu comme étant un litéral valide.", token.Loc);
+            throw new CompilerDetailedException(ErrorType.SyntaxError, "le token actuel n'est pas reconnu comme étant un litéral valide.", token.Loc);
 
-        return new LiteralExpression(literalType);
+        return new LiteralExpression(token, literalType);
     }
 
     private VarRefExpression ParseVarRefExpression()
@@ -357,7 +356,7 @@ public class Parser : CompilerPass
 
         if (token.Type != expectedType)
         {
-            throw new ParseDetailedException(errorMessage, token.Loc);
+            throw new CompilerDetailedException(ErrorType.SyntaxError, errorMessage, token.Loc);
         }
 
         return token;
@@ -392,18 +391,21 @@ public class Parser : CompilerPass
     }
 }
 
-public class ParseException : Exception
+public class CompilerException : Exception
 {
-    public ParseException(string message) : base(message) 
+    public ErrorType ErrorType { get; }
+    
+    public CompilerException(ErrorType errorType, string message) : base(message) 
     {
+        ErrorType = errorType;
     }
 }
 
-public class ParseDetailedException : ParseException
+public class CompilerDetailedException : CompilerException
 {
     public Location Location { get; }
 
-    public ParseDetailedException(string message, Location location) : base(message)
+    public CompilerDetailedException(ErrorType errorType, string message, Location location) : base(errorType, message)
     {
         Location = location;
     }

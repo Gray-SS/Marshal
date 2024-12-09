@@ -1,5 +1,4 @@
 using Marshal.Compiler.Semantics;
-using Marshal.Compiler.Types;
 
 namespace Marshal.Compiler.Syntax.Statements;
 
@@ -11,16 +10,17 @@ public class FuncDeclStatement : SyntaxStatement
 
     public FunctionSymbol Symbol { get; set; } = null!;
 
-    public MarshalType ReturnType { get; set; } = null!;
+    public MarshalType BoundReturnType { get; set; } = null!;
+    public SyntaxTypeNode SyntaxReturnType { get; set; } = null!;
 
-    public List<SyntaxFuncDeclParam> Params { get; } 
+    public List<FuncParamDeclNode> Params { get; } 
 
     public ScopeStatement? Body { get; }
 
-    public FuncDeclStatement(Token nameToken, MarshalType returnType, List<SyntaxFuncDeclParam> parameters, ScopeStatement? body, bool isExtern)
+    public FuncDeclStatement(Token nameToken, SyntaxTypeNode syntaxReturnType, List<FuncParamDeclNode> parameters, ScopeStatement? body, bool isExtern)
     {
         NameToken = nameToken;
-        ReturnType = returnType;
+        SyntaxReturnType = syntaxReturnType;
         IsExtern = isExtern;
         Params = parameters;
         Body = body;

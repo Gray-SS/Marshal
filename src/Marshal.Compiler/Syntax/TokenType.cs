@@ -18,7 +18,6 @@ public enum TokenType : byte
     // Keywords
     ProcKeyword,
     FuncKeyword,
-    IntKeyword,
     
     //Specials
     EOF,
@@ -33,4 +32,6 @@ public enum TokenType : byte
     ExternKeyword,
     ParamsKeyword,
     Comma,
+    FalseKeyword,
+    TrueKeyword,
 }

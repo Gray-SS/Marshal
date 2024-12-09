@@ -9,9 +9,9 @@ public abstract class CompilerPass
 
     protected ErrorHandler ErrorHandler { get; }
 
-    public CompilerPass(CompilationContext source, ErrorHandler errorHandler)
+    public CompilerPass(CompilationContext context, ErrorHandler errorHandler)
     {
-        Context = source;
+        Context = context;
         ErrorHandler = errorHandler;
     }
 

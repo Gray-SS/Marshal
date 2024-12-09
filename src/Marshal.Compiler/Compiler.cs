@@ -1,9 +1,10 @@
 using System.Diagnostics;
+using Marshal.Compiler.Emit;
 using Marshal.Compiler.Errors;
+using Marshal.Compiler.IR;
 using Marshal.Compiler.Semantics;
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Utilities;
-// using Marshal.Compiler.Emit;
 
 namespace Marshal.Compiler;
 
@@ -19,12 +20,13 @@ public class Compiler
         _options = options;
 
         GlobalTable = new SymbolTable();
-        GlobalTable.AddSymbol(Symbol.Byte);
-        GlobalTable.AddSymbol(Symbol.Short);
-        GlobalTable.AddSymbol(Symbol.Int);
-        GlobalTable.AddSymbol(Symbol.Long);
-        GlobalTable.AddSymbol(Symbol.Char);
-        GlobalTable.AddSymbol(Symbol.Void);
+        GlobalTable.AddSymbol(MarshalType.Byte);
+        GlobalTable.AddSymbol(MarshalType.Boolean);
+        GlobalTable.AddSymbol(MarshalType.Short);
+        GlobalTable.AddSymbol(MarshalType.Int);
+        GlobalTable.AddSymbol(MarshalType.Long);
+        GlobalTable.AddSymbol(MarshalType.Char);
+        GlobalTable.AddSymbol(MarshalType.Void);
     }
 
     public bool Compile()
@@ -51,10 +53,10 @@ public class Compiler
 
             if (success)
             {
-                // CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.Output}");
+                CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.Output}");
 
-                // foreach (var obj in objs)
-                //     File.Delete(obj);
+                foreach (var obj in objs)
+                    File.Delete(obj);
             }
 
             sw.Stop();
@@ -94,8 +96,9 @@ public class Compiler
             new Lexer(context, _errorHandler),
             new Parser(context, _errorHandler),
             new SymbolTableBuilder(context, _errorHandler),
-            new TypeChecker(context, _errorHandler),
-            // new ObjectEmitter(context, _errorHandler),
+            new SemanticAnalyzer(context, _errorHandler),
+            new IRGenerator(context, _errorHandler),
+            new ObjectEmitter(context, _errorHandler),
         };
 
         foreach (CompilerPass pass in passes)
@@ -106,6 +109,7 @@ public class Compiler
                 return false;
         }
 
+        objFile = context.ObjFilePath;
         return true;
     }
 }

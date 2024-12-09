@@ -81,22 +81,22 @@ public class SymbolTable
         return null;
     }
 
-    public TypeSymbol GetType(string name)
+    public MarshalType GetType(string name)
     {
-        var symbol = GetSymbol(name, SymbolType.Type) ?? Symbol.Void;
-        return (TypeSymbol)symbol;
+        var symbol = GetSymbol(name, SymbolType.Type) ?? MarshalType.Void;
+        return (MarshalType)symbol;
     }
 
-    public VariableSymbol GetVariable(string name)
+    public VariableSymbol? GetVariable(string name)
     {
-        var symbol = GetSymbol(name, SymbolType.Variable) ?? Symbol.Void;
-        return (VariableSymbol)symbol;
+        var symbol = GetSymbol(name, SymbolType.Variable);
+        return symbol as VariableSymbol;
     }
 
-    public FunctionSymbol GetFunction(string name)
+    public FunctionSymbol? GetFunction(string name)
     {
-        var symbol = GetSymbol(name, SymbolType.Function) ?? Symbol.Void;
-        return (FunctionSymbol)symbol;
+        var symbol = GetSymbol(name, SymbolType.Function);
+        return symbol as FunctionSymbol;
     }
 
     public bool HasSymbol(string name, SymbolType type)
@@ -118,9 +118,9 @@ public class SymbolTable
         return symbol != null;
     }
 
-    public bool TryGetType(string name, [NotNullWhen(true)] out TypeSymbol? type)
+    public bool TryGetType(string name, [NotNullWhen(true)] out MarshalType? type)
     {
-        type = GetSymbol(name, SymbolType.Type) as TypeSymbol;
+        type = GetSymbol(name, SymbolType.Type) as MarshalType;
         return type != null;
     }
 

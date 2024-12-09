@@ -1,4 +1,4 @@
-using Marshal.Compiler.Types;
+using Marshal.Compiler.Semantics;
 
 namespace Marshal.Compiler.Syntax;
 
