@@ -63,13 +63,14 @@ public class Parser : CompilerPass
 
     private AssignmentStatement ParseAssignmentStatement()
     {
-        Token nameIdentifier = Expect(TokenType.Identifier, "identifiant de la variable attendu pour l'assignement d'une variable");
+        Token identifierToken = Expect(TokenType.Identifier, "identifiant ou variable attendue.");
+        SyntaxExpression lValue = ParseLValue(identifierToken);
         Expect(TokenType.Equal, "signe égale '=' attendu après l'identifiant de la variable.");
 
         SyntaxExpression assignExpr = ParseExpression();
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après l'assignement d'une variable.");
 
-        return new AssignmentStatement(nameIdentifier, assignExpr);
+        return new AssignmentStatement(identifierToken, lValue, assignExpr);
     }
 
     private FuncDeclStatement ParseFuncDeclStatement()
@@ -150,15 +151,8 @@ public class Parser : CompilerPass
             {
                 NextToken();
 
-                int length = 0;
-                if (CurrentToken.Type == TokenType.IntLiteral)
-                {
-                    var lengthToken = NextToken();
-                    length = int.Parse(lengthToken.Value);
-                }
-
                 Expect(TokenType.CloseSquareBracket, "un crochet de fermeture ']' est attendu après l'ouverture du crochet.");
-                type = new SyntaxArrayType(type, length);
+                type = new SyntaxArrayType(type);
             }
         }
 
@@ -221,12 +215,12 @@ public class Parser : CompilerPass
 
     private SyntaxExpression ParseExpression()
     {
-        SyntaxExpression expr;
+        SyntaxExpression expr = CurrentToken.Type switch {
+            TokenType.OpenCurlyBracket => ParseArrayExpression(),
+            TokenType.NewKeyword => ParseNewExpression(),
 
-        if (CurrentToken.Type == TokenType.OpenCurlyBracket) 
-            expr = ParseArrayExpression();
-        else
-            expr = ParseBinOpExpression();
+            _ => ParseBinOpExpression(),
+        };
 
         if (Peek(0).Type == TokenType.OpenSquareBracket)
         {
@@ -239,6 +233,49 @@ public class Parser : CompilerPass
         }
 
         return expr;
+    }
+
+    private NewExpression ParseNewExpression()
+    {
+        Expect(TokenType.NewKeyword, "le mot clé 'new' est attendu pour une expression de type new.");
+        Token typeName = Expect(TokenType.Identifier, "le nom du type a allouer est attendu après le mot clé new.");
+
+        if (CurrentToken.Type == TokenType.OpenSquareBracket)
+        {
+            //Parse the new array expression
+            NextToken();
+            var lengthExpr = ParseExpression();
+            Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'expression de taille du tableau.");
+
+            return new NewArrayExpression(typeName, lengthExpr);
+        }
+
+        if (CurrentToken.Type == TokenType.OpenBracket)
+        {
+            ReportDetailed(ErrorType.Error, "l'allouement d'une classe ou d'une structure n'est pas supporté.", CurrentToken.Loc);
+            throw new Exception();
+        }
+
+        ReportDetailed(ErrorType.Error, $"le token '{CurrentToken.Value}' n'était pas attendu.", CurrentToken.Loc);
+        throw new Exception();
+    }
+
+    private SyntaxExpression ParseLValue(Token identifierToken)
+    {
+        var lValueExpr = new VarRefExpression(identifierToken);
+
+        if (CurrentToken.Type == TokenType.OpenSquareBracket)
+        {
+            NextToken();
+
+            SyntaxExpression indexExpr = ParseExpression();
+            
+            Expect(TokenType.CloseSquareBracket, "crochet fermant attendu.");
+
+            return new ArrayAccessExpression(lValueExpr, indexExpr);
+        }
+        
+        return lValueExpr;
     }
 
     private ArrayInitExpression ParseArrayExpression()

@@ -4,26 +4,96 @@ using Marshal.Compiler.Syntax.Expressions;
 using Marshal.Compiler.Syntax.Statements;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Semantics;
+using System.Buffers;
 
 namespace Marshal.Compiler.IR;
 
+public class Function
+{
+    public string Name => Symbol.Name;
+
+    public FunctionSymbol Symbol { get; }
+    public TypeRef ReturnType { get; }
+    public ValueRef Pointer { get; }
+
+    public Function(FunctionSymbol symbol, TypeRef returnType, ValueRef pointer)
+    {
+        Symbol = symbol;
+        Pointer = pointer;
+        ReturnType = returnType;
+    }
+}
+
+public class Param
+{
+    public string Name { get; }
+    public TypeRef Type { get; }
+    public ValueRef Value { get; }
+
+    public Param(string name, TypeRef type, ValueRef value)
+    {
+        Name = name;
+        Type = type;
+        Value = value;
+    }
+}
+
+public class Variable
+{
+    public string Name => Symbol.Name;
+
+    public VariableSymbol Symbol { get; }
+    public TypeRef Type { get; }
+    public ValueRef Pointer { get; set; }
+
+    public Variable(VariableSymbol symbol, TypeRef type)
+    {
+        Symbol = symbol;
+        Type = type;
+    }
+
+    public void SetPointer(ValueRef pointer)
+    {
+        Pointer = pointer;
+    }
+
+    public ValueRef Allocate(BuilderRef builder)
+    {
+        Pointer = LLVM.BuildAlloca(builder, Type, $"{Symbol.Name}_var");
+        return Pointer;
+    }
+
+    public void Store(BuilderRef builder, ValueRef value)
+    {
+        LLVM.BuildStore(builder, value, Pointer);
+    }
+
+    public ValueRef Load(BuilderRef builder)
+    {
+        return LLVM.BuildLoad(builder, Pointer, $"{Symbol.Name}_load");
+    }
+}
+
 public class IRGenerator : CompilerPass, IASTVisitor
 {
-    private static ValueRef ZeroInt = LLVM.ConstInt(LLVM.Int32Type(), 0, false);
-
     private int _globalStrCount;
     private ModuleRef _module;
     private BuilderRef _builder;
     private readonly LLVMTypeResolver _typeResolver;
 
     private readonly Stack<ValueRef> _valueStack;
-    private readonly Dictionary<string, ValueRef> _namedValues;
+    private readonly Dictionary<string, Param> _params;
+    private readonly Dictionary<string, Variable> _variables;
+    private readonly Dictionary<string, Function> _functions;
 
     public IRGenerator(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
         _typeResolver = new LLVMTypeResolver();
         _valueStack = new Stack<ValueRef>();
-        _namedValues = new Dictionary<string, ValueRef>();
+
+        _params = new Dictionary<string, Param>();
+        _variables = new Dictionary<string, Variable>();
+        _functions = new Dictionary<string, Function>();
     }
 
     public override void Apply()
@@ -58,32 +128,15 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(AssignmentStatement stmt)
     {
-        VariableSymbol variable = stmt.Symbol;
+        Variable variable = _variables[stmt.Symbol.Name];
+        ValueRef lValue = EvaluateExpr(stmt.LValue, false);
+        ValueRef value = EvaluateExpr(stmt.Initializer);
 
-        stmt.Initializer.Accept(this);
-        TypeRef varType = _typeResolver.Resolve(variable.DataType);
-        ValueRef varPtr = LLVM.BuildAlloca(_builder, varType, variable.Name);
-
-        ValueRef initializeValue = _valueStack.Pop();
-
-        if (LLVM.GetTypeKind(LLVM.TypeOf(initializeValue)) == TypeKind.ArrayTypeKind &&
-            LLVM.GetTypeKind(varType) == TypeKind.PointerTypeKind)
+        if (stmt.LValue is ArrayAccessExpression)
         {
-            ValueRef arrayBaseAddress = LLVM.BuildGEP(
-                _builder,
-                initializeValue,
-                [ ZeroInt, ZeroInt ],
-                "array_ptr"
-            );
-
-            _namedValues[variable.Name] = varPtr;
-            LLVM.BuildStore(_builder, arrayBaseAddress, varPtr);
+            LLVM.BuildStore(_builder, value, lValue);
         }
-        else
-        {
-            _namedValues[variable.Name] = varPtr;
-            LLVM.BuildStore(_builder, initializeValue, varPtr);
-        }
+        else variable.Store(_builder, value);
     }
 
     public void Visit(FunCallStatement stmt)
@@ -94,25 +147,30 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(FuncDeclStatement stmt)
     {
-        FunctionSymbol function = stmt.Symbol;
+        FunctionSymbol functionSymbol = stmt.Symbol;
 
-        TypeRef retType = _typeResolver.Resolve(function.ReturnType);
-        TypeRef[] paramTypes = function.Params.Select(x => _typeResolver.Resolve(x.DataType)).ToArray();
+        TypeRef retType = _typeResolver.Resolve(functionSymbol.ReturnType);
+        TypeRef[] paramTypes = functionSymbol.Params.Select(x => _typeResolver.Resolve(x.DataType)).ToArray();
 
         TypeRef functionType = LLVM.FunctionType(retType, paramTypes, false);
-        ValueRef fn = LLVM.AddFunction(_module, function.Name, functionType);
-        _namedValues[function.Name] = fn;
+        ValueRef fn = LLVM.AddFunction(_module, functionSymbol.Name, functionType);
 
-        if (function.IsExtern)
+        Function function = new Function(functionSymbol, retType, fn);
+        _functions[function.Name] = function;
+
+        if (functionSymbol.IsExtern)
             LLVM.SetLinkage(fn, Linkage.ExternalLinkage);
 
-        for (int i = 0; i < function.Params.Count; i++)
+        for (int i = 0; i < functionSymbol.Params.Count; i++)
         {
-            VariableSymbol param = function.Params[i];
-            ValueRef pValue = LLVM.GetParam(fn, (uint)i);
-            LLVM.SetValueName(pValue, param.Name);
+            VariableSymbol paramSymbol = functionSymbol.Params[i];
+            TypeRef paramType = _typeResolver.Resolve(paramSymbol.DataType);
 
-            _namedValues[param.Name] = pValue;
+            ValueRef pValue = LLVM.GetParam(fn, (uint)i);
+            LLVM.SetValueName(pValue, paramSymbol.Name);
+
+            Param param = new Param(paramSymbol.Name, paramType, pValue);
+            _params[param.Name] = param;
         }
 
         if (stmt.Body != null)
@@ -125,54 +183,33 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(ReturnStatement stmt)
     {
-        stmt.ReturnExpr.Accept(this);
+        ValueRef value = EvaluateExpr(stmt.ReturnExpr);
         
-        ValueRef value = _valueStack.Pop();
         LLVM.BuildRet(_builder, value);
     }
 
     public void Visit(VarDeclStatement stmt)
     {
-        VariableSymbol variable = stmt.Symbol;
+        VariableSymbol variableSymbol = stmt.Symbol;
 
-        TypeRef varType = _typeResolver.Resolve(variable.DataType);
-        ValueRef varPtr = LLVM.BuildAlloca(_builder, varType, variable.Name);
+        TypeRef varType = _typeResolver.Resolve(variableSymbol.DataType);
+
+        var variable = new Variable(variableSymbol, varType);
+        variable.Allocate(_builder);
 
         if (stmt.Initializer != null)
         {
-            stmt.Initializer.Accept(this);
-            ValueRef initializeValue = _valueStack.Pop();
-
-            if (LLVM.GetTypeKind(LLVM.TypeOf(initializeValue)) == TypeKind.ArrayTypeKind &&
-                LLVM.GetTypeKind(varType) == TypeKind.PointerTypeKind)
-            {
-                ValueRef arrayBaseAddress = LLVM.BuildGEP(
-                    _builder,
-                    initializeValue,
-                    [ ZeroInt, ZeroInt ],
-                    "array_ptr"
-                );
-
-                _namedValues[variable.Name] = varPtr;
-                LLVM.BuildStore(_builder, arrayBaseAddress, varPtr);
-            }
-            else
-            {
-                _namedValues[variable.Name] = varPtr;
-                LLVM.BuildStore(_builder, initializeValue, varPtr);
-            }
+            ValueRef value = EvaluateExpr(stmt.Initializer);
+            variable.Store(_builder, value);
         }
 
-        _namedValues[variable.Name] = varPtr;
+        _variables[variableSymbol.Name] = variable;
     }
 
     public void Visit(BinaryOpExpression expr)
     {
-        expr.Left.Accept(this);
-        ValueRef lValue = _valueStack.Pop();
-
-        expr.Right.Accept(this);
-        ValueRef rValue = _valueStack.Pop();
+        ValueRef lValue = EvaluateExpr(expr.Left);
+        ValueRef rValue = EvaluateExpr(expr.Right);
 
         ValueRef result = expr.OpType switch
         {
@@ -226,53 +263,80 @@ public class IRGenerator : CompilerPass, IASTVisitor
     {
         VariableSymbol var = expr.Symbol;
 
-        ValueRef varValue = _namedValues[var.Name];
-        if (LLVM.GetTypeKind(LLVM.TypeOf(varValue)) == TypeKind.PointerTypeKind)
+        if (_variables.TryGetValue(var.Name, out Variable? variable))
         {
-            ValueRef loadedValue = LLVM.BuildLoad(_builder, varValue, "var_loaded_value");
-            _valueStack.Push(loadedValue);
+            _valueStack.Push(variable.Load(_builder));
         }
-        else _valueStack.Push(varValue);
+        else if (_params.TryGetValue(var.Name, out Param? param))
+        {
+            _valueStack.Push(param.Value);
+        }
+        else 
+        {
+            throw new CompilerException(ErrorType.InternalError, "FATAL. The variable couldn't be found.");
+        }
+    }
+
+    public void Visit(NewExpression expr)
+    {
+        if (expr is NewArrayExpression arrayExpr)
+        {
+            var arrayType = (ArrayType)arrayExpr.Type;
+            var elementType = _typeResolver.Resolve(arrayType.ElementType);
+
+            var lengthValue = EvaluateExpr(arrayExpr.LengthExpr);
+
+            ValueRef arrayPtr = LLVM.BuildArrayMalloc(_builder, elementType, lengthValue, $"array_malloc");
+            _valueStack.Push(arrayPtr);
+        }
     }
 
     public void Visit(ArrayAccessExpression expr)
     {
-        expr.ArrayExpr.Accept(this);
-        ValueRef indexorPtr = _valueStack.Pop();
+        ValueRef indexorPtr = EvaluateExpr(expr.ArrayExpr);
+        ValueRef indexValue = EvaluateExpr(expr.IndexExpr);
 
-        expr.IndexExpr.Accept(this);
-        ValueRef indexValue = _valueStack.Pop();
-
-        if (LLVM.GetTypeKind(LLVM.TypeOf(indexorPtr)) == TypeKind.ArrayTypeKind)
-        {
-            ValueRef elementPointer = LLVM.BuildGEP(_builder, indexorPtr, [ ZeroInt, indexValue ], "arr_iptr");
-            ValueRef indexorValue = LLVM.BuildLoad(_builder, elementPointer, "arr_ival");
-
-            _valueStack.Push(indexorValue);
-        }
-        else if (LLVM.GetTypeKind(LLVM.TypeOf(indexorPtr)) == TypeKind.PointerTypeKind)
-        {
-            ValueRef elementPointer = LLVM.BuildGEP(_builder, indexorPtr, [ indexValue ], "ptr_iptr");
-            ValueRef pointedValue = LLVM.BuildLoad(_builder, elementPointer, "ptr_ival");
-
-            _valueStack.Push(pointedValue);
-        }
+        ValueRef elementPtr = LLVM.BuildGEP(_builder, indexorPtr, [ indexValue ], "array_iptr");
+        _valueStack.Push(elementPtr);
     }
 
     public void Visit(ArrayInitExpression expr)
     {
+        var values = expr.Expressions.Select(x => {
+            x.Accept(this);
+            return _valueStack.Pop();
+        }).ToArray();
+
+        TypeRef type = _typeResolver.Resolve(expr.Type); 
+        TypeRef elementType = LLVM.GetElementType(type);
+
+        ValueRef length = LLVM.ConstInt(LLVM.Int32Type(), (ulong)values.Length, false);
+        ValueRef array = LLVM.ConstArray(elementType, values);
+
+        _valueStack.Push(array);
     }
 
     private ValueRef CallFunction(FunctionSymbol function, List<SyntaxExpression> args)
     {
-        ValueRef fn = _namedValues[function.Name];
+        Function fn = _functions[function.Name];
 
         ValueRef[] argsValue = args.Select(x => {
             x.Accept(this);
             return _valueStack.Pop();
         }).ToArray(); 
 
-        return LLVM.BuildCall(_builder, fn, argsValue, $"{function.Name}_result");
+        return LLVM.BuildCall(_builder, fn.Pointer, argsValue, $"{function.Name}_result");
+    }
+
+    private ValueRef EvaluateExpr(SyntaxExpression expr, bool rValue = true)
+    {
+        expr.Accept(this);
+        ValueRef value = _valueStack.Pop();
+
+        if (rValue && expr is ArrayAccessExpression)
+            value = LLVM.BuildLoad(_builder, value, $"rvalue");
+
+        return value;
     }
 
     private string GetGlobalStrName()

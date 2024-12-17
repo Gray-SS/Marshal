@@ -25,14 +25,11 @@ public class LLVMTypeResolver
             case PointerType pointer:
                 return LLVM.PointerType(Resolve(pointer.Pointee), 0);
             case ArrayType array:
-                return LLVM.ArrayType(Resolve(array.ElementType), (uint)array.ElementCount);
+                return LLVM.PointerType(Resolve(array.ElementType), 0);
+            case TypeAlias alias:
+                return Resolve(alias.Aliased);
             default:
                 throw new NotImplementedException();
         }
-    }
-
-    private TypeRef ResolvePrimitive(PrimitiveType primitive)
-    {
-        return _llvmTypesMap[primitive];
     }
 }

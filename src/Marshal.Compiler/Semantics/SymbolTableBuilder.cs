@@ -1,3 +1,4 @@
+using System.Reflection.Metadata.Ecma335;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Syntax.Expressions;
@@ -133,6 +134,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         bool isDefined = stmt.Initializer != null;
 
         var type = ResolveType(stmt.SyntaxType);
+
         stmt.Initializer?.Accept(this);
 
         var variable = new VariableSymbol(variableName, type, isDefined);
@@ -145,8 +147,9 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
     {
         string variableName = stmt.NameToken.Value;
         if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
-            throw new CompilerDetailedException(ErrorType.SemanticError, $"une variable nommée '{variableName}' existe déjà dans le contexte actuel.", stmt.NameToken.Loc);
+            throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
 
+        stmt.LValue.Accept(this);
         stmt.Initializer.Accept(this);
         stmt.Symbol = symbol;
     }
@@ -194,7 +197,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
             throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'est pas déclarée.", expr.NameToken.Loc);
 
-        if (!symbol.IsInitialized)
+        if (!symbol.IsInitialized && !symbol.DataType.IsArray)
             throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' a été utilisée mais n'a jamais été initialisée.", expr.NameToken.Loc);
 
         expr.Symbol = symbol;
@@ -263,8 +266,36 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             throw new NotImplementedException();
     }
 
+    public void Visit(NewExpression expr)
+    {
+        if (expr is NewArrayExpression arrayExpr)
+        {
+            arrayExpr.LengthExpr.Accept(this);
+
+            var type = ResolveType(expr.TypeName.Value);
+            if (arrayExpr.LengthExpr.Type != MarshalType.Int)
+                throw new CompilerException(ErrorType.SemanticError, $"la taille du tableau doit obligatoirement être de type '{MarshalType.Int.Name}' mais un type '{arrayExpr.LengthExpr.Type.Name}' a été reçu.");
+
+            arrayExpr.Type = MarshalType.CreateDynamicArray(type);
+        }
+    }
+
     public void Visit(ArrayInitExpression expr)
     {
+        throw new NotSupportedException("Array init expressions aren't supported anymore.");
+
+        // var initializers = expr.Expressions;
+
+        // MarshalType type = null!;
+        // foreach (SyntaxExpression item in initializers)
+        // {
+        //     item.Accept(this);
+        //     if (type == null) type = item.Type;
+        //     else if (item.Type != type)
+        //         throw new CompilerException(ErrorType.SemanticError, "toutes les expressions du tableau doivent être du même type.");
+        // }
+
+        // expr.Type = MarshalType.Crea(type, initializers.Count);
     }
 
     private void DoVerifiedBlock(Action action)
@@ -292,6 +323,17 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             return a;
     }
 
+    private MarshalType ResolveType(string name)
+    {
+        if (!Context.SymbolTable.TryGetType(name, out MarshalType? type))
+            throw new CompilerException(ErrorType.SemanticError, $"le type '{name}' n'a pas été reconnu comme étant un type valide.");
+
+        if (type is TypeAlias alias)
+            return alias.Aliased;
+
+        return type;
+    }
+
     private MarshalType ResolveType(SyntaxTypeNode node)
     {
         if (!Context.SymbolTable.HasSymbol(node.Name, SymbolType.Type))
@@ -305,13 +347,18 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         switch (node)
         {
             case SyntaxPrimitiveType primitive:
-                return Context.SymbolTable.GetType(primitive.Name);
+                var type = Context.SymbolTable.GetType(primitive.Name);
+
+                if (type is TypeAlias alias)
+                    return alias.Aliased;
+                
+                return type;
                 
             case SyntaxPointerType pointer:
                 return MarshalType.CreatePointer(ResolveTypeRec(pointer.Pointee));
 
             case SyntaxArrayType array:
-                return MarshalType.CreateArray(ResolveTypeRec(array.ElementType), array.ElementCount); 
+                return MarshalType.CreateDynamicArray(ResolveTypeRec(array.ElementType)); 
 
             default:
                 throw new NotImplementedException();

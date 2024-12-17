@@ -35,4 +35,5 @@ public enum TokenType : byte
     StringLiteral,
     CharLiteral,
     Invalid,
+    NewKeyword,
 }

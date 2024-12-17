@@ -1,0 +1,16 @@
+func extern puts(string str): int;
+
+func get(int[] tab, int index): int {
+    return tab[index];
+}
+
+func main(): int {
+    var tab: int[] = new int[4];
+    tab[0] = 10;
+    tab[1] = 20;
+    tab[2] = 30;
+    tab[3] = 40;
+
+    var int: result = get(tab, 2);
+    return result;
+}

@@ -39,15 +39,12 @@ public class SyntaxPointerType : SyntaxTypeNode
 public class SyntaxArrayType : SyntaxTypeNode
 {
     public SyntaxTypeNode ElementType { get; }
-    
-    public int ElementCount { get; }
 
     public override Token NameToken => ElementType.NameToken;
     public override SyntaxTypeNode BaseType => ElementType.BaseType;
 
-    public SyntaxArrayType(SyntaxTypeNode elementType, int elementCount)
+    public SyntaxArrayType(SyntaxTypeNode elementType)
     {
         ElementType = elementType;
-        ElementCount = elementCount;
     }
 }

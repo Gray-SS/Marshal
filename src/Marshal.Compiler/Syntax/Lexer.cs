@@ -94,6 +94,7 @@ public class Lexer : CompilerPass
                     "proc" => TokenType.ProcKeyword,
                     "func" => TokenType.FuncKeyword,
                     "var" => TokenType.VarKeyword,
+                    "new" => TokenType.NewKeyword,
                     "return" => TokenType.ReturnKeyword,
                     "extern" => TokenType.ExternKeyword,
                     "params" => TokenType.ParamsKeyword,

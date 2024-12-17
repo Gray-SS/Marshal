@@ -83,8 +83,8 @@ public class SymbolTable
 
     public MarshalType GetType(string name)
     {
-        var symbol = GetSymbol(name, SymbolType.Type) ?? MarshalType.Void;
-        return (MarshalType)symbol;
+        var symbol = GetSymbol(name, SymbolType.Type) as MarshalType ?? MarshalType.Void;
+        return symbol;
     }
 
     public VariableSymbol? GetVariable(string name)

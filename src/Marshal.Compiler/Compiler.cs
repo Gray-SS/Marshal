@@ -27,6 +27,7 @@ public class Compiler
         GlobalTable.AddSymbol(MarshalType.Long);
         GlobalTable.AddSymbol(MarshalType.Char);
         GlobalTable.AddSymbol(MarshalType.Void);
+        GlobalTable.AddSymbol(MarshalType.String);
     }
 
     public bool Compile()

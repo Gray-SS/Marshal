@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Syntax;
 using Marshal.Compiler.Syntax.Expressions;
@@ -45,7 +44,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
                 if (statement != returnStatements.First())
                     ReportDetailed(ErrorType.Warning, $"la déclaration de retour n'est jamais atteinte.", statement.ReturnKeyword.Loc);
 
-                if (statement.ReturnExpr.Type != function.ReturnType)
+                if (!IsTypeCompatible(statement.ReturnExpr.Type, function.ReturnType))
                     ReportDetailed(ErrorType.Error, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnKeyword.Loc);
             }
         }
@@ -96,6 +95,11 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         AnalyzeFunctionCall(function, expr.Args, expr.NameToken.Loc);
     }
 
+
+    public void Visit(NewExpression expr)
+    {
+    }
+
     public void Visit(LiteralExpression expr)
     {
     }
@@ -129,7 +133,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             var stmtParam = args[i];
             var functionParam = function.Params[i];
 
-            if (functionParam.DataType != stmtParam.Type)
+            if (!IsTypeCompatible(functionParam.DataType, stmtParam.Type))
             {
                 ReportDetailed(ErrorType.SemanticError, $"l'argument '{functionParam.Name}' de la fonction '{function.Name}' attendait une expression de type '{functionParam.DataType.Name}' mais un argument de type '{stmtParam.Type.Name}' a été reçu.", functionLoc);
                 continue;
@@ -153,6 +157,16 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         if (left is ArrayType leftArray && right is ArrayType rightArray)
         {
             return IsTypeCompatible(leftArray.ElementType, rightArray.ElementType);
+        }
+
+        if (left is TypeAlias lalias)
+        {
+            return IsTypeCompatible(lalias.Aliased, right);
+        }
+
+        if (right is TypeAlias ralias)
+        {
+            return IsTypeCompatible(left, ralias.Aliased);
         }
 
         if (left.Base.Name == right.Base.Name)

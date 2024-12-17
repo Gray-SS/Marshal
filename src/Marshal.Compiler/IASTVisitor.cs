@@ -29,6 +29,8 @@ public interface IASTVisitor
 
     void Visit(VarRefExpression expr);
 
+    void Visit(NewExpression expr);
+
     void Visit(ArrayInitExpression expr);
 
     void Visit(ArrayAccessExpression expr);
