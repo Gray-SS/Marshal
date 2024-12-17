@@ -11,6 +11,8 @@ func main(): int {
     tab[2] = 30;
     tab[3] = 40;
 
-    var int: result = get(tab, 2);
+    puts("Hello World !");
+
+    var result: int = get(tab, 2);
     return result;
 }
