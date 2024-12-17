@@ -6,6 +6,13 @@ public enum BinOperatorType
     Subtraction,
     Multiplication,
     Division,
+
+    Equals,
+    NotEquals,
+    BiggerThan,
+    BiggerThanEq,
+    LessThan,
+    LessThanEq,
 }
 
 public sealed class BinaryOpExpression : SyntaxExpression

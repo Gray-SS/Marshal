@@ -41,6 +41,20 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         Context.SymbolTable.ExitScope();
     }
 
+    public void Visit(IfStatement stmt)
+    {
+        stmt.IfScope.ConditionExpr.Accept(this);
+        stmt.IfScope.Scope.Accept(this);
+
+        foreach (ConditionalScope item in stmt.ElseIfScopes)
+        {
+            item.ConditionExpr.Accept(this);
+            item.Scope.Accept(this);
+        }
+
+        stmt.ElseScope?.Accept(this);
+    }
+
     public void Visit(FuncDeclStatement stmt)
     {
         string functionName = stmt.NameToken.Value;
@@ -183,10 +197,17 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         {
             if (!expr.Left.Type.IsNumeric || !expr.Right.Type.IsNumeric)
                 throw new CompilerException(ErrorType.SemanticError, $"opération invalide '{expr.OpType}' entre type non numérique '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
+
+            expr.Type = GetWiderType(expr.Left.Type, expr.Right.Type);
+        }
+        else if (expr.OpType.IsCompBinOpType())
+        {
+            if (!AreComparableTypes(expr.Left.Type, expr.Right.Type))
+                throw new CompilerException(ErrorType.SemanticError, $"comparaison immpossible entre une valeur de type '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
+
+            expr.Type = MarshalType.Boolean;
         }
         else throw new NotImplementedException();
-
-        expr.Type = GetWiderType(expr.Left.Type, expr.Right.Type);
     }
 
     public void Visit(VarRefExpression expr)
@@ -320,6 +341,11 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             return b;
         else
             return a;
+    }
+
+    private static bool AreComparableTypes(MarshalType leftType, MarshalType rightType)
+    {
+        return (leftType.IsNumeric && rightType.IsNumeric) || (leftType == MarshalType.Boolean && rightType == MarshalType.Boolean);
     }
 
     private MarshalType ResolveType(string name)

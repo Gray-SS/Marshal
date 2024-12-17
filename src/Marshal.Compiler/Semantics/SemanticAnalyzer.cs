@@ -24,6 +24,25 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         }
     }
 
+    public void Visit(IfStatement stmt)
+    {
+        VerifyConditionalScope(stmt.IfScope);
+
+        foreach (ConditionalScope item in stmt.ElseIfScopes)
+            VerifyConditionalScope(item);
+
+        stmt.ElseScope?.Accept(this);   
+    }
+
+    private void VerifyConditionalScope(ConditionalScope scope)
+    {
+        scope.ConditionExpr.Accept(this);
+        if (scope.ConditionExpr.Type != MarshalType.Boolean)
+            Report(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.");
+
+        scope.Scope.Accept(this);
+    }
+
     public void Visit(ScopeStatement stmt)
     {
         foreach (SyntaxStatement statement in stmt.Statements)

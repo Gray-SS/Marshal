@@ -118,6 +118,31 @@ public class IRGenerator : CompilerPass, IASTVisitor
         }
     }
 
+    public void Visit(IfStatement stmt)
+    {
+        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
+
+        ValueRef ifValue = EvaluateExpr(stmt.IfScope.ConditionExpr);
+
+        BasicBlockRef ifBB = LLVM.AppendBasicBlock(fn, "then");
+        BasicBlockRef elseBB = LLVM.AppendBasicBlock(fn, "else");
+        BasicBlockRef mergeBB = LLVM.AppendBasicBlock(fn, "merge");
+
+        LLVM.BuildCondBr(_builder, ifValue, ifBB, elseBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, ifBB);
+
+        stmt.IfScope.Scope.Accept(this);
+        LLVM.BuildBr(_builder, mergeBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, elseBB);
+
+        stmt.ElseScope?.Accept(this);
+        LLVM.BuildBr(_builder, mergeBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, mergeBB);
+    }
+
     public void Visit(ScopeStatement stmt)
     {
         foreach (var statement in stmt.Statements)
@@ -217,6 +242,13 @@ public class IRGenerator : CompilerPass, IASTVisitor
             BinOperatorType.Subtraction => LLVM.BuildSub(_builder, lValue, rValue, "sub_result"),
             BinOperatorType.Multiplication => LLVM.BuildMul(_builder, lValue, rValue, "mul_result"),
             BinOperatorType.Division => LLVM.BuildSDiv(_builder, lValue, rValue, "div_result"),
+            BinOperatorType.Equals => LLVM.BuildICmp(_builder, IntPredicate.IntEQ, lValue, rValue, "eq_result"),
+            BinOperatorType.NotEquals => LLVM.BuildICmp(_builder, IntPredicate.IntNE, lValue, rValue, "ne_result"),
+            BinOperatorType.BiggerThan => LLVM.BuildICmp(_builder, IntPredicate.IntSGT, lValue, rValue, "gt_result"),
+            BinOperatorType.BiggerThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSGE, lValue, rValue, "ge_result"),
+            BinOperatorType.LessThan => LLVM.BuildICmp(_builder, IntPredicate.IntSLT, lValue, rValue, "lt_result"),
+            BinOperatorType.LessThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSLE, lValue, rValue, "le_result"),
+
             _ => throw new NotImplementedException(),
         };
 

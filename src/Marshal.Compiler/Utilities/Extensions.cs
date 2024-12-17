@@ -31,4 +31,19 @@ public static class Extensions
             _ => false,
         };
     }
+
+    public static bool IsCompBinOpType(this BinOperatorType binOpType)
+    {
+        return binOpType switch
+        {
+            BinOperatorType.LessThan => true,
+            BinOperatorType.LessThanEq => true,
+            BinOperatorType.BiggerThan => true,
+            BinOperatorType.BiggerThanEq => true,
+            BinOperatorType.Equals => true,
+            BinOperatorType.NotEquals => true,
+
+            _ => false,
+        };
+    }
 }

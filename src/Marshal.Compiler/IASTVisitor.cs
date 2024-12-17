@@ -8,6 +8,8 @@ public interface IASTVisitor
 {
     void Visit(CompilationUnit unit);
 
+    void Visit(IfStatement stmt);
+
     void Visit(AssignmentStatement stmt);
 
     void Visit(ScopeStatement stmt);
@@ -15,7 +17,6 @@ public interface IASTVisitor
     void Visit(FunCallStatement stmt);
 
     void Visit(FuncDeclStatement stmt);
-
 
     void Visit(ReturnStatement stmt);
 

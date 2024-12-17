@@ -36,4 +36,13 @@ public enum TokenType : byte
     CharLiteral,
     Invalid,
     NewKeyword,
+    IfKeyword,
+    ElseKeyword,
+    EqualCond,
+    BiggerThanEqCond,
+    BiggerThanCond,
+    LessThanEqCond,
+    LessThanCond,
+    ExclamationMark,
+    NotEqualCond,
 }

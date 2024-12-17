@@ -100,6 +100,8 @@ public class Lexer : CompilerPass
                     "params" => TokenType.ParamsKeyword,
                     "true" => TokenType.TrueKeyword,
                     "false" => TokenType.FalseKeyword,
+                    "if" => TokenType.IfKeyword,
+                    "else" => TokenType.ElseKeyword,
                     _ => TokenType.Identifier
                 };
 
@@ -113,7 +115,22 @@ public class Lexer : CompilerPass
                 case '-': tokens.Add(ReadToken(TokenType.Minus, 1)); break;
                 case '*': tokens.Add(ReadToken(TokenType.Asterisk, 1)); break;
                 case '/': tokens.Add(ReadToken(TokenType.Slash, 1)); break;
-                case '=': tokens.Add(ReadToken(TokenType.Equal, 1)); break;
+                case '!':
+                    if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.NotEqualCond, 2)); 
+                    else tokens.Add(ReadToken(TokenType.ExclamationMark, 1)); 
+                    break;
+                case '=':
+                    if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.EqualCond, 2));
+                    else tokens.Add(ReadToken(TokenType.Equal, 1)); 
+                    break;
+                case '>':
+                    if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.BiggerThanEqCond, 2));
+                    else tokens.Add(ReadToken(TokenType.BiggerThanCond, 1));
+                    break;
+                case '<':
+                    if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.LessThanEqCond, 2));
+                    else tokens.Add(ReadToken(TokenType.LessThanCond, 1));
+                    break;
                 case ';': tokens.Add(ReadToken(TokenType.SemiColon, 1)); break;
                 case '(': tokens.Add(ReadToken(TokenType.OpenBracket, 1)); break;
                 case ')': tokens.Add(ReadToken(TokenType.CloseBracket, 1)); break;

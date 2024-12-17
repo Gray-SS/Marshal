@@ -47,6 +47,8 @@ public class Parser : CompilerPass
     {
         if (CurrentToken.Type == TokenType.FuncKeyword)
             return ParseFuncDeclStatement();
+        else if (CurrentToken.Type == TokenType.IfKeyword)
+            return ParseIfStatement();
         else if (CurrentToken.Type == TokenType.ReturnKeyword)
             return ParseReturnStatement();
         else if (CurrentToken.Type == TokenType.VarKeyword)
@@ -59,6 +61,40 @@ public class Parser : CompilerPass
             return ParseScopeStatement();
 
         throw new CompilerDetailedException(ErrorType.SyntaxError, $"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
+    }
+
+    private IfStatement ParseIfStatement()
+    {
+        var ifScope = ParseConditionalScope();
+
+        var elseIfScopes = new List<ConditionalScope>();
+        while (CurrentToken.Type == TokenType.ElseKeyword && Peek(1).Type == TokenType.IfKeyword) {
+            //Consume the else token
+            NextToken();
+            
+            var condScope = ParseConditionalScope();
+            elseIfScopes.Add(condScope);
+        }
+
+        ScopeStatement? elseScope = null; 
+        if (CurrentToken.Type == TokenType.ElseKeyword)
+        {
+            NextToken();
+            elseScope = ParseScopeStatement();
+        }
+
+        return new IfStatement(ifScope, elseIfScopes, elseScope);
+    }
+
+    private ConditionalScope ParseConditionalScope()
+    {
+        Expect(TokenType.IfKeyword, "le mot clé 'if' est attendu afin de créer une déclaration conditionnelle.");
+        Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue après le mot-clé 'if'.");
+        var condExpr = ParseExpression();
+        Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue après l'expression conditionnelle.");
+        var scope = ParseScopeStatement();
+
+        return new ConditionalScope(scope, condExpr);
     }
 
     private AssignmentStatement ParseAssignmentStatement()
@@ -307,13 +343,11 @@ public class Parser : CompilerPass
 
         while (true)
         {
-            var opType = GetBinaryOperatorType(CurrentToken.Type);
-            if (opType == null)
-                break;
+            BinOperatorType? opType = GetBinaryOperatorType(CurrentToken.Type);
+            if (opType == null) break;
 
-            int opPrecedence = GetOperatorPrecedence(CurrentToken.Type);
-            if (opPrecedence < precedence)
-                break;
+            int opPrecedence = GetOperatorPrecedence(opType.Value);
+            if (opPrecedence < precedence) break;
 
             NextToken();
 
@@ -333,18 +367,30 @@ public class Parser : CompilerPass
             TokenType.Minus => BinOperatorType.Subtraction,
             TokenType.Asterisk => BinOperatorType.Multiplication,
             TokenType.Slash => BinOperatorType.Division,
+            TokenType.EqualCond => BinOperatorType.Equals,
+            TokenType.NotEqualCond => BinOperatorType.NotEquals,
+            TokenType.BiggerThanCond => BinOperatorType.BiggerThan,
+            TokenType.BiggerThanEqCond => BinOperatorType.BiggerThanEq,
+            TokenType.LessThanCond => BinOperatorType.LessThan,
+            TokenType.LessThanEqCond => BinOperatorType.LessThanEq,
             _ => null
         };
     }
 
-    private static int GetOperatorPrecedence(TokenType tokenType)
+    private static int GetOperatorPrecedence(BinOperatorType opType)
     {
-        return tokenType switch
+        return opType switch
         {
-            TokenType.Plus => 1, // Lowest precedence
-            TokenType.Minus => 1, // Lowest precedence
-            TokenType.Asterisk => 2, // Higher precedence
-            TokenType.Slash => 2, // Higher precedence
+            BinOperatorType.Addition => 1,
+            BinOperatorType.Subtraction => 1,
+            BinOperatorType.Multiplication => 2,
+            BinOperatorType.Division => 2,
+            BinOperatorType.LessThan => 3,
+            BinOperatorType.LessThanEq => 3,
+            BinOperatorType.BiggerThan => 3,
+            BinOperatorType.BiggerThanEq => 3,
+            BinOperatorType.Equals => 3,
+            BinOperatorType.NotEquals => 3,
             _ => 0
         };
     }
