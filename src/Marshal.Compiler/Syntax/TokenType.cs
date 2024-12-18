@@ -45,4 +45,5 @@ public enum TokenType : byte
     LessThanCond,
     ExclamationMark,
     NotEqualCond,
+    Underscore,
 }

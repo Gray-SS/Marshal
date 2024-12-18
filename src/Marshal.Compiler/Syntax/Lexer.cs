@@ -84,9 +84,9 @@ public class Lexer : CompilerPass
                 continue;
             }
 
-            if (char.IsLetter(CurrentChar))
+            if (char.IsLetter(CurrentChar) || CurrentChar == '_')
             {
-                int length = ReadWhile(char.IsLetterOrDigit);
+                int length = ReadWhile((c) => char.IsLetterOrDigit(c) || c == '_');
                 ReadOnlySpan<char> span = Context.Content.AsSpan().Slice(Position, length);
                 
                 TokenType type = span switch
@@ -115,6 +115,7 @@ public class Lexer : CompilerPass
                 case '-': tokens.Add(ReadToken(TokenType.Minus, 1)); break;
                 case '*': tokens.Add(ReadToken(TokenType.Asterisk, 1)); break;
                 case '/': tokens.Add(ReadToken(TokenType.Slash, 1)); break;
+                case '_': tokens.Add(ReadToken(TokenType.Underscore, 1)); break;
                 case '!':
                     if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.NotEqualCond, 2)); 
                     else tokens.Add(ReadToken(TokenType.ExclamationMark, 1)); 
