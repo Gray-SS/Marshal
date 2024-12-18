@@ -46,4 +46,5 @@ public enum TokenType : byte
     ExclamationMark,
     NotEqualCond,
     Underscore,
+    WhileKeyword,
 }

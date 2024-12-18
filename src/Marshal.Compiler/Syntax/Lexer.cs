@@ -95,6 +95,7 @@ public class Lexer : CompilerPass
                     "func" => TokenType.FuncKeyword,
                     "var" => TokenType.VarKeyword,
                     "new" => TokenType.NewKeyword,
+                    "while" => TokenType.WhileKeyword,
                     "return" => TokenType.ReturnKeyword,
                     "extern" => TokenType.ExternKeyword,
                     "params" => TokenType.ParamsKeyword,

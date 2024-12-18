@@ -49,6 +49,8 @@ public class Parser : CompilerPass
             return ParseFuncDeclStatement();
         else if (CurrentToken.Type == TokenType.IfKeyword)
             return ParseIfStatement();
+        else if (CurrentToken.Type == TokenType.WhileKeyword)
+            return ParseWhileStatement();
         else if (CurrentToken.Type == TokenType.ReturnKeyword)
             return ParseReturnStatement();
         else if (CurrentToken.Type == TokenType.VarKeyword)
@@ -61,6 +63,17 @@ public class Parser : CompilerPass
             return ParseScopeStatement();
 
         throw new CompilerDetailedException(ErrorType.SyntaxError, $"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
+    }
+
+    private WhileStatement ParseWhileStatement()
+    {
+        Expect(TokenType.WhileKeyword, "le mot clé 'while' est attendu afin de créer une boucle.");
+        Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue après le mot-clé 'while'.");
+        var condExpr = ParseExpression();
+        Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue après l'expression conditionnelle.");
+        var scope = ParseScopeStatement();
+
+        return new WhileStatement(condExpr, scope);
     }
 
     private IfStatement ParseIfStatement()

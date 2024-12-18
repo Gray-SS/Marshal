@@ -52,6 +52,12 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         stmt.ElseScope?.Accept(this);
     }
 
+    public void Visit(WhileStatement stmt)
+    {
+        stmt.CondExpr.Accept(this);
+        stmt.Scope.Accept(this);
+    }
+
     public void Visit(FuncDeclStatement stmt)
     {
         string functionName = stmt.NameToken.Value;

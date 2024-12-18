@@ -153,6 +153,28 @@ public class IRGenerator : CompilerPass, IASTVisitor
         LLVM.PositionBuilderAtEnd(_builder, mergeBB);
     }
 
+    public void Visit(WhileStatement stmt)
+    {
+        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
+        BasicBlockRef mergeBB = LLVM.AppendBasicBlock(fn, "merge");
+        BasicBlockRef preBB = LLVM.AppendBasicBlock(fn, "pre");
+        BasicBlockRef thenBB = LLVM.AppendBasicBlock(fn, "then");
+
+        LLVM.BuildBr(_builder, preBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, preBB);
+        ValueRef condValue = EvaluateExpr(stmt.CondExpr); 
+        LLVM.BuildCondBr(_builder, condValue, thenBB, mergeBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, thenBB);
+        stmt.Scope.Accept(this);
+
+        if (!stmt.Scope.IsReturning)
+            LLVM.BuildBr(_builder, preBB);
+
+        LLVM.PositionBuilderAtEnd(_builder, mergeBB);
+    }
+
     public void Visit(ScopeStatement stmt)
     {
         foreach (var statement in stmt.Statements)

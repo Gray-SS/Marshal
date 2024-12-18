@@ -10,6 +10,8 @@ public interface IASTVisitor
 
     void Visit(IfStatement stmt);
 
+    void Visit(WhileStatement stmt);
+
     void Visit(AssignmentStatement stmt);
 
     void Visit(ScopeStatement stmt);

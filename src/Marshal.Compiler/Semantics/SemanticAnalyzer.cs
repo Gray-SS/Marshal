@@ -41,6 +41,15 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         scope.Scope.Accept(this);
     }
 
+    public void Visit(WhileStatement stmt)
+    {
+        stmt.CondExpr.Accept(this);
+        if (stmt.CondExpr.Type != MarshalType.Boolean)
+            Report(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.");
+
+        stmt.Scope.Accept(this);
+    }
+
     public void Visit(ScopeStatement stmt)
     {
         foreach (SyntaxStatement statement in stmt.Statements)
