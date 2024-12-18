@@ -147,7 +147,8 @@ public class IRGenerator : CompilerPass, IASTVisitor
         }
 
         stmt.ElseScope?.Accept(this);
-        LLVM.BuildBr(_builder, mergeBB);
+        if (stmt.ElseScope != null && !stmt.ElseScope.IsReturning)
+            LLVM.BuildBr(_builder, mergeBB);
 
         LLVM.PositionBuilderAtEnd(_builder, mergeBB);
     }
@@ -228,6 +229,9 @@ public class IRGenerator : CompilerPass, IASTVisitor
             stmt.Body.Accept(this);
 
             _crntFn = default;
+
+            if (!stmt.Body.IsReturning)
+                LLVM.BuildBr(_builder, returnBB);
         }
     }
 
