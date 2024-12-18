@@ -130,8 +130,9 @@ public class Parser : CompilerPass
         while (CurrentToken.Type != TokenType.EOF && 
                CurrentToken.Type != TokenType.CloseBracket)
         {
+            Token pNameId = Expect(TokenType.Identifier, "le nom du paramètre est attendu.");
+            Expect(TokenType.Colon, "une colonne ':' est attendu après le nom du paramètre.");
             SyntaxTypeNode pTypeId = ParseType("le type du paramètre est attendu.");
-            Token pNameId = Expect(TokenType.Identifier, "le nom de la variable est attendue.");
             parameters.Add(new FuncParamDeclNode(pTypeId, pNameId));
 
             if (CurrentToken.Type == TokenType.Comma) NextToken();
