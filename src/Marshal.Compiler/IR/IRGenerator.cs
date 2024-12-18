@@ -5,6 +5,7 @@ using Marshal.Compiler.Syntax.Statements;
 using Marshal.Compiler.Errors;
 using Marshal.Compiler.Semantics;
 using System.Buffers;
+using System.Formats.Tar;
 
 namespace Marshal.Compiler.IR;
 
@@ -15,6 +16,8 @@ public class Function
     public FunctionSymbol Symbol { get; }
     public TypeRef ReturnType { get; }
     public ValueRef Pointer { get; }
+    public ValueRef ReturnPointer { get; set; }
+    public BasicBlockRef ReturnBlock { get; set; }
 
     public Function(FunctionSymbol symbol, TypeRef returnType, ValueRef pointer)
     {
@@ -76,11 +79,14 @@ public class Variable
 
 public class IRGenerator : CompilerPass, IASTVisitor
 {
+    private const string FUNCTION_RET_VAR_NAME = "ret_value";
+
     private int _globalStrCount;
     private ModuleRef _module;
     private BuilderRef _builder;
     private readonly LLVMTypeResolver _typeResolver;
 
+    private Function? _crntFn;
     private readonly Stack<ValueRef> _valueStack;
     private readonly Dictionary<string, Param> _params;
     private readonly Dictionary<string, Variable> _variables;
@@ -121,21 +127,24 @@ public class IRGenerator : CompilerPass, IASTVisitor
     public void Visit(IfStatement stmt)
     {
         ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
-
-        ValueRef ifValue = EvaluateExpr(stmt.IfScope.ConditionExpr);
-
-        BasicBlockRef ifBB = LLVM.AppendBasicBlock(fn, "then");
-        BasicBlockRef elseBB = LLVM.AppendBasicBlock(fn, "else");
         BasicBlockRef mergeBB = LLVM.AppendBasicBlock(fn, "merge");
 
-        LLVM.BuildCondBr(_builder, ifValue, ifBB, elseBB);
+        foreach (var item in stmt.IfsScopes)
+        {
+            BasicBlockRef thenBB = LLVM.AppendBasicBlock(fn, "then");
+            BasicBlockRef elseBB = LLVM.AppendBasicBlock(fn, "else");
 
-        LLVM.PositionBuilderAtEnd(_builder, ifBB);
+            ValueRef cond = EvaluateExpr(item.ConditionExpr);
+            LLVM.BuildCondBr(_builder, cond, thenBB, elseBB);
 
-        stmt.IfScope.Scope.Accept(this);
-        LLVM.BuildBr(_builder, mergeBB);
+            LLVM.PositionBuilderAtEnd(_builder, thenBB);
+            item.Scope.Accept(this);
 
-        LLVM.PositionBuilderAtEnd(_builder, elseBB);
+            if (!item.Scope.IsReturning)
+                LLVM.BuildBr(_builder, mergeBB);
+
+            LLVM.PositionBuilderAtEnd(_builder, elseBB);
+        }
 
         stmt.ElseScope?.Accept(this);
         LLVM.BuildBr(_builder, mergeBB);
@@ -200,17 +209,38 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         if (stmt.Body != null)
         {
-            LLVM.PositionBuilderAtEnd(_builder, LLVM.AppendBasicBlock(fn, "entry"));
+            _crntFn = function;
+            BasicBlockRef entryBB = LLVM.AppendBasicBlock(fn, "entry");
+
+            LLVM.PositionBuilderAtEnd(_builder, entryBB);
+            ValueRef returnPtr = LLVM.BuildAlloca(_builder, retType, FUNCTION_RET_VAR_NAME);
+            function.ReturnPointer = returnPtr;
+
+            BasicBlockRef returnBB = LLVM.AppendBasicBlock(fn, "return");
+            function.ReturnBlock = returnBB;
+
+            LLVM.PositionBuilderAtEnd(_builder, returnBB);
+            var retValue = LLVM.BuildLoad(_builder, returnPtr, "ret_value");
+            LLVM.BuildRet(_builder, retValue);
+
+            LLVM.PositionBuilderAtEnd(_builder, entryBB); 
 
             stmt.Body.Accept(this);
+
+            _crntFn = default;
         }
     }
 
     public void Visit(ReturnStatement stmt)
     {
+        if (_crntFn == null) {
+            Report(ErrorType.Error, "Returning should only be done within a function.");
+            return;
+        }
+
         ValueRef value = EvaluateExpr(stmt.ReturnExpr);
-        
-        LLVM.BuildRet(_builder, value);
+        LLVM.BuildStore(_builder, value, _crntFn.ReturnPointer);
+        LLVM.BuildBr(_builder, _crntFn.ReturnBlock);
     }
 
     public void Visit(VarDeclStatement stmt)

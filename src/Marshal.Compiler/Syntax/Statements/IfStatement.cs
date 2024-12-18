@@ -14,14 +14,12 @@ public class ConditionalScope
 
 public sealed class IfStatement : SyntaxStatement
 {
-    public ConditionalScope IfScope { get; }
-    public List<ConditionalScope> ElseIfScopes { get; }
+    public List<ConditionalScope> IfsScopes { get; }
     public ScopeStatement? ElseScope { get; }
 
-    public IfStatement(ConditionalScope ifScope, List<ConditionalScope> elseIfScopes, ScopeStatement? elseScope)
+    public IfStatement(List<ConditionalScope> ifScopes, ScopeStatement? elseScope)
     {
-        IfScope = ifScope;
-        ElseIfScopes = elseIfScopes;
+        IfsScopes = ifScopes;
         ElseScope = elseScope;
     }
 

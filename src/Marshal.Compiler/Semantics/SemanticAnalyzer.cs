@@ -26,9 +26,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
     public void Visit(IfStatement stmt)
     {
-        VerifyConditionalScope(stmt.IfScope);
-
-        foreach (ConditionalScope item in stmt.ElseIfScopes)
+        foreach (ConditionalScope item in stmt.IfsScopes)
             VerifyConditionalScope(item);
 
         stmt.ElseScope?.Accept(this);   

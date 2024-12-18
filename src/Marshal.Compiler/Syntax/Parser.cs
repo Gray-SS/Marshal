@@ -65,15 +65,17 @@ public class Parser : CompilerPass
 
     private IfStatement ParseIfStatement()
     {
-        var ifScope = ParseConditionalScope();
+        var ifsScopes = new List<ConditionalScope>
+        {
+            ParseConditionalScope()
+        };
 
-        var elseIfScopes = new List<ConditionalScope>();
         while (CurrentToken.Type == TokenType.ElseKeyword && Peek(1).Type == TokenType.IfKeyword) {
             //Consume the else token
             NextToken();
             
             var condScope = ParseConditionalScope();
-            elseIfScopes.Add(condScope);
+            ifsScopes.Add(condScope);
         }
 
         ScopeStatement? elseScope = null; 
@@ -83,7 +85,7 @@ public class Parser : CompilerPass
             elseScope = ParseScopeStatement();
         }
 
-        return new IfStatement(ifScope, elseIfScopes, elseScope);
+        return new IfStatement(ifsScopes, elseScope);
     }
 
     private ConditionalScope ParseConditionalScope()

@@ -43,10 +43,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     public void Visit(IfStatement stmt)
     {
-        stmt.IfScope.ConditionExpr.Accept(this);
-        stmt.IfScope.Scope.Accept(this);
-
-        foreach (ConditionalScope item in stmt.ElseIfScopes)
+        foreach (ConditionalScope item in stmt.IfsScopes)
         {
             item.ConditionExpr.Accept(this);
             item.Scope.Accept(this);
