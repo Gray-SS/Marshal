@@ -5,6 +5,21 @@ namespace Marshal.Compiler.IR;
 public static class LLVMHelper
 {
     public static readonly ValueRef ZeroInt = LLVM.ConstInt(LLVM.Int32Type(), 0, false);
+    public static readonly ValueRef OneInt = LLVM.ConstInt(LLVM.Int32Type(), 1, false);
+
+    public static void BuildIncrement(BuilderRef builder, ValueRef varPtr)
+    {
+        ValueRef varValue = LLVM.BuildLoad(builder, varPtr, "var_value");
+        ValueRef result = LLVM.BuildAdd(builder, varValue, OneInt, "inc_result");
+        LLVM.BuildStore(builder, result, varPtr);
+    }
+
+    public static void BuildDecrement(BuilderRef builder, ValueRef varPtr)
+    {
+        ValueRef varValue = LLVM.BuildLoad(builder, varPtr, "var_value");
+        ValueRef result = LLVM.BuildSub(builder, varValue, OneInt, "dec_result");
+        LLVM.BuildStore(builder, result, varPtr);
+    }
 
     public static void BuildMemCpy(BuilderRef builder, ValueRef destPtr, ValueRef srcPtr, uint length)
     {

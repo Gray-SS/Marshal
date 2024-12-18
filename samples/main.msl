@@ -1,10 +1,10 @@
 func extern puts(str: string): int;
 
 func main(): int {
-    var x: int = 0;
-    while (x < 10) {
+    var x: int = 3;
+    while (x > 0) {
         puts("test");
-        x = x + 1;
+        x--;
     }
 
     return 0;

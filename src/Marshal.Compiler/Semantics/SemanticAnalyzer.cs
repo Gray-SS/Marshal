@@ -103,6 +103,14 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         }
     }
 
+    public void Visit(IncrementStatement stmt)
+    {
+        if (!stmt.Symbol.DataType.IsNumeric) 
+        {
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'incrémenter une variable non numérique '{stmt.Symbol.Name}'", stmt.NameToken.Loc);
+        }
+    }
+
     public void Visit(FunCallStatement stmt)
     {
         FunctionSymbol function = stmt.Symbol;

@@ -12,6 +12,8 @@ public interface IASTVisitor
 
     void Visit(WhileStatement stmt);
 
+    void Visit(IncrementStatement stmt);
+
     void Visit(AssignmentStatement stmt);
 
     void Visit(ScopeStatement stmt);

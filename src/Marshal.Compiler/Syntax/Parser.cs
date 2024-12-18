@@ -55,10 +55,17 @@ public class Parser : CompilerPass
             return ParseReturnStatement();
         else if (CurrentToken.Type == TokenType.VarKeyword)
             return ParseVarDeclStatement();
-        else if (CurrentToken.Type == TokenType.Identifier && Peek(1).Type == TokenType.OpenBracket)
-            return ParseFunCallStatement();
         else if (CurrentToken.Type == TokenType.Identifier)
+        {
+            if (Peek(1).Type == TokenType.OpenBracket)
+                return ParseFunCallStatement();
+            else if (Peek(1).Type == TokenType.Plus && Peek(2).Type == TokenType.Plus)
+                return ParseIncrementStatement();
+            else if (Peek(1).Type == TokenType.Minus && Peek(2).Type == TokenType.Minus)
+                return ParseIncrementStatement();
+            
             return ParseAssignmentStatement();
+        }
         else if (CurrentToken.Type == TokenType.OpenCurlyBracket)
             return ParseScopeStatement();
 
@@ -74,6 +81,28 @@ public class Parser : CompilerPass
         var scope = ParseScopeStatement();
 
         return new WhileStatement(condExpr, scope);
+    }
+
+    private IncrementStatement ParseIncrementStatement()
+    {
+        IncrementStatement result;
+        Token varNameToken = Expect(TokenType.Identifier, "l'identifiant de la variable a incrémenté est attendue.");
+        if (CurrentToken.Type == TokenType.Plus)
+        {
+            NextToken();
+            Expect(TokenType.Plus, "symbole plus '+' attendu après le '+'.");
+            result = new IncrementStatement(varNameToken, false);
+        }
+        else if (CurrentToken.Type == TokenType.Minus)
+        {
+            NextToken();
+            Expect(TokenType.Minus, "symbole moins '-' attendu après le '-'.");
+            result = new IncrementStatement(varNameToken, true);
+        }
+        else throw new InvalidOperationException();
+
+        Expect(TokenType.SemiColon, "point virgule ';' attendu après l'incrémentation de la variable.");
+        return result;
     }
 
     private IfStatement ParseIfStatement()
@@ -100,6 +129,7 @@ public class Parser : CompilerPass
 
         return new IfStatement(ifsScopes, elseScope);
     }
+
 
     private ConditionalScope ParseConditionalScope()
     {

@@ -140,7 +140,6 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         }
     }
 
-    
     public void Visit(VarDeclStatement stmt)
     {
         string variableName = stmt.NameToken.Value;
@@ -167,6 +166,15 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
         stmt.LValue.Accept(this);
         stmt.Initializer.Accept(this);
+        stmt.Symbol = symbol;
+    }
+
+    public void Visit(IncrementStatement stmt)
+    {
+        string variableName = stmt.NameToken.Value;
+        if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
+            throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
+
         stmt.Symbol = symbol;
     }
 

@@ -196,6 +196,16 @@ public class IRGenerator : CompilerPass, IASTVisitor
         else variable.Store(_builder, value);
     }
 
+    public void Visit(IncrementStatement stmt)
+    {
+        Variable variable = _variables[stmt.Symbol.Name];
+
+        if (stmt.Decrement)
+            LLVMHelper.BuildDecrement(_builder, variable.Pointer);
+        else
+            LLVMHelper.BuildIncrement(_builder, variable.Pointer);
+    }
+
     public void Visit(FunCallStatement stmt)
     {
         FunctionSymbol function = stmt.Symbol;
