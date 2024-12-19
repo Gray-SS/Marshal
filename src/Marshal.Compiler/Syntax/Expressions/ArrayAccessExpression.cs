@@ -6,7 +6,9 @@ public class ArrayAccessExpression : SyntaxExpression
 
     public SyntaxExpression IndexExpr { get; }
 
-    public ArrayAccessExpression(SyntaxExpression arrayExpr, SyntaxExpression indexExpr)
+    public override ValueCategory ValueCategory => ValueCategory.Locator;
+
+    public ArrayAccessExpression(Location loc, SyntaxExpression arrayExpr, SyntaxExpression indexExpr) : base(loc)
     {
         ArrayExpr = arrayExpr;
         IndexExpr = indexExpr;

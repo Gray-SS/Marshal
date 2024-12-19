@@ -4,7 +4,7 @@ public class CompilationUnit : SyntaxNode
 {
     public List<SyntaxStatement> Statements { get; }
 
-    public CompilationUnit(List<SyntaxStatement> statements)
+    public CompilationUnit(List<SyntaxStatement> statements) : base(default)
     {
         Statements = statements;
     }

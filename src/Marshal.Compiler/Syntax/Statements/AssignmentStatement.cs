@@ -6,16 +6,16 @@ public class AssignmentStatement : SyntaxStatement
 {
     public Token NameToken { get; }
 
-    public SyntaxExpression LValue { get; }
+    public SyntaxExpression LExpr { get; }
 
     public SyntaxExpression Initializer { get; }
 
     public VariableSymbol Symbol { get; set; } = null!;
 
-    public AssignmentStatement(Token nameToken, SyntaxExpression lValue, SyntaxExpression assignExpr)
+    public AssignmentStatement(Location loc, Token nameToken, SyntaxExpression lExpr, SyntaxExpression assignExpr) : base(loc)
     {
-        LValue = lValue;
         NameToken = nameToken;
+        LExpr = lExpr;
         Initializer = assignExpr;
     }
 

@@ -1,10 +1,10 @@
-int main()
-{
-    int x = 2;
+typedef struct {
+} test_t;
 
-    if (x > 2) {
-        return 1;
-    }
+int main() {
+    test_t x;
+    test_t* y = &x;
 
+    test_t z = (test_t)y;
     return 0;
 }

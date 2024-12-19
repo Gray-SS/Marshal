@@ -55,6 +55,8 @@ public class Parser : CompilerPass
             return ParseReturnStatement();
         else if (CurrentToken.Type == TokenType.VarKeyword)
             return ParseVarDeclStatement();
+        else if (CurrentToken.Type == TokenType.Star && Peek(1).Type == TokenType.Identifier)
+            return ParseAssignmentStatement();
         else if (CurrentToken.Type == TokenType.Identifier)
         {
             if (Peek(1).Type == TokenType.OpenBracket)
@@ -74,30 +76,33 @@ public class Parser : CompilerPass
 
     private WhileStatement ParseWhileStatement()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.WhileKeyword, "le mot clé 'while' est attendu afin de créer une boucle.");
         Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue après le mot-clé 'while'.");
         var condExpr = ParseExpression();
         Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue après l'expression conditionnelle.");
         var scope = ParseScopeStatement();
 
-        return new WhileStatement(condExpr, scope);
+        return new WhileStatement(loc, condExpr, scope);
     }
 
     private IncrementStatement ParseIncrementStatement()
     {
         IncrementStatement result;
+
+        Location loc = CurrentToken.Loc;
         Token varNameToken = Expect(TokenType.Identifier, "l'identifiant de la variable a incrémenté est attendue.");
         if (CurrentToken.Type == TokenType.Plus)
         {
             NextToken();
             Expect(TokenType.Plus, "symbole plus '+' attendu après le '+'.");
-            result = new IncrementStatement(varNameToken, false);
+            result = new IncrementStatement(loc, varNameToken, false);
         }
         else if (CurrentToken.Type == TokenType.Minus)
         {
             NextToken();
             Expect(TokenType.Minus, "symbole moins '-' attendu après le '-'.");
-            result = new IncrementStatement(varNameToken, true);
+            result = new IncrementStatement(loc, varNameToken, true);
         }
         else throw new InvalidOperationException();
 
@@ -107,6 +112,7 @@ public class Parser : CompilerPass
 
     private IfStatement ParseIfStatement()
     {
+        Location loc = CurrentToken.Loc;
         var ifsScopes = new List<ConditionalScope>
         {
             ParseConditionalScope()
@@ -127,9 +133,8 @@ public class Parser : CompilerPass
             elseScope = ParseScopeStatement();
         }
 
-        return new IfStatement(ifsScopes, elseScope);
+        return new IfStatement(loc, ifsScopes, elseScope);
     }
-
 
     private ConditionalScope ParseConditionalScope()
     {
@@ -144,18 +149,35 @@ public class Parser : CompilerPass
 
     private AssignmentStatement ParseAssignmentStatement()
     {
-        Token identifierToken = Expect(TokenType.Identifier, "identifiant ou variable attendue.");
-        SyntaxExpression lValue = ParseLValue(identifierToken);
+        Location loc = CurrentToken.Loc;
+        SyntaxExpression locatorExpr = ParseExpression();
+        if (locatorExpr.ValueCategory != ValueCategory.Locator)
+            throw new CompilerDetailedException(ErrorType.SyntaxError, $"une expression de type locator est attendue pour la partie gauche de l'assignement.", locatorExpr.Loc);
+
+        Token identifierToken = GetIdentifierToken(locatorExpr);
         Expect(TokenType.Equal, "signe égale '=' attendu après l'identifiant de la variable.");
 
         SyntaxExpression assignExpr = ParseExpression();
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après l'assignement d'une variable.");
 
-        return new AssignmentStatement(identifierToken, lValue, assignExpr);
+        return new AssignmentStatement(loc, identifierToken, locatorExpr, assignExpr);
+    }
+
+    private static Token GetIdentifierToken(SyntaxExpression expr)
+    {
+        if (expr is VarRefExpression varRef)
+            return varRef.NameToken;
+        else if (expr is ArrayAccessExpression arrAccessExpr)
+            return GetIdentifierToken(arrAccessExpr.ArrayExpr);
+        else if (expr is UnaryOpExpression unaryOpExpr)
+            return GetIdentifierToken(unaryOpExpr.Operand);
+
+        throw new InvalidOperationException("Couldn't find the identifier token.");
     }
 
     private FuncDeclStatement ParseFuncDeclStatement()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.FuncKeyword, "mot clé 'func' attendu pour la déclaration de fonction.");
 
         bool isExtern = false;
@@ -194,11 +216,12 @@ public class Parser : CompilerPass
         }
         else NextToken();
 
-        return new FuncDeclStatement(nameIdentifier, returnType, parameters, body, isExtern);
+        return new FuncDeclStatement(loc, nameIdentifier, returnType, parameters, body, isExtern);
     }
 
     private VarDeclStatement ParseVarDeclStatement()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.VarKeyword, "mot clé 'var' attendu pour la déclaration de variable.");
         Token nameIdentifier = Expect(TokenType.Identifier, "identifiant de la variable attendu après 'var'.");
 
@@ -214,17 +237,17 @@ public class Parser : CompilerPass
 
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration d'une variable.");
 
-        return new VarDeclStatement(nameIdentifier, type, initExpr);
+        return new VarDeclStatement(loc, nameIdentifier, type, initExpr);
     }
 
     private SyntaxTypeNode ParseType(string errorMessage)
     {
         SyntaxTypeNode type = ParsePrimitiveType(errorMessage);
         
-        while (CurrentToken.Type == TokenType.Asterisk ||
+        while (CurrentToken.Type == TokenType.Star ||
                CurrentToken.Type == TokenType.OpenSquareBracket)
         {
-            if (CurrentToken.Type == TokenType.Asterisk)
+            if (CurrentToken.Type == TokenType.Star)
             {
                 NextToken();
                 type = new SyntaxPointerType(type);
@@ -249,6 +272,7 @@ public class Parser : CompilerPass
 
     private FunCallStatement ParseFunCallStatement()
     {
+        Location loc = CurrentToken.Loc;
         Token token = Expect(TokenType.Identifier, "un identifiant est attendu pour l'appel d'une fonction.");
         Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue après le nom de la fonction a appelé.");
 
@@ -266,21 +290,23 @@ public class Parser : CompilerPass
         Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attentue après la définition des paramètres de la fonction.");
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après l'appel à une fonction.");
 
-        return new FunCallStatement(token, parameters);
+        return new FunCallStatement(loc, token, parameters);
     }
 
     private ReturnStatement ParseReturnStatement()
     {
+        Location loc = CurrentToken.Loc;
         Token returnKeyword = Expect(TokenType.ReturnKeyword, "mot clé 'return' attendu pour la déclaration de retour.");
 
         SyntaxExpression returnExpr = ParseExpression();
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration de retour.");
 
-        return new ReturnStatement(returnKeyword, returnExpr);
+        return new ReturnStatement(loc, returnKeyword, returnExpr);
     }
 
     private ScopeStatement ParseScopeStatement()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.OpenCurlyBracket, "accolade ouvrante '{' attendue pour le début du bloc.");
 
         var statements = new List<SyntaxStatement>();
@@ -292,11 +318,12 @@ public class Parser : CompilerPass
         }
 
         Expect(TokenType.CloseCurlyBracket, "accolade fermante '}' attendue pour la fin du bloc.");
-        return new ScopeStatement(statements);
+        return new ScopeStatement(loc, statements);
     }
 
     private SyntaxExpression ParseExpression()
     {
+        Location loc = CurrentToken.Loc;
         SyntaxExpression expr = CurrentToken.Type switch {
             TokenType.OpenCurlyBracket => ParseArrayExpression(),
             TokenType.NewKeyword => ParseNewExpression(),
@@ -304,14 +331,14 @@ public class Parser : CompilerPass
             _ => ParseBinOpExpression(),
         };
 
-        if (Peek(0).Type == TokenType.OpenSquareBracket)
+        if (CurrentToken.Type == TokenType.OpenSquareBracket)
         {
             //Parse an array access expression
             NextToken();
             SyntaxExpression indexExpr = ParseExpression();
             Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'index de l'accès au tableau.");
 
-            expr = new ArrayAccessExpression(expr, indexExpr);
+            expr = new ArrayAccessExpression(loc, expr, indexExpr);
         }
 
         return expr;
@@ -319,6 +346,7 @@ public class Parser : CompilerPass
 
     private NewExpression ParseNewExpression()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.NewKeyword, "le mot clé 'new' est attendu pour une expression de type new.");
         Token typeName = Expect(TokenType.Identifier, "le nom du type a allouer est attendu après le mot clé new.");
 
@@ -329,7 +357,7 @@ public class Parser : CompilerPass
             var lengthExpr = ParseExpression();
             Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'expression de taille du tableau.");
 
-            return new NewArrayExpression(typeName, lengthExpr);
+            return new NewArrayExpression(loc, typeName, lengthExpr);
         }
 
         if (CurrentToken.Type == TokenType.OpenBracket)
@@ -342,26 +370,9 @@ public class Parser : CompilerPass
         throw new Exception();
     }
 
-    private SyntaxExpression ParseLValue(Token identifierToken)
-    {
-        var lValueExpr = new VarRefExpression(identifierToken);
-
-        if (CurrentToken.Type == TokenType.OpenSquareBracket)
-        {
-            NextToken();
-
-            SyntaxExpression indexExpr = ParseExpression();
-            
-            Expect(TokenType.CloseSquareBracket, "crochet fermant attendu.");
-
-            return new ArrayAccessExpression(lValueExpr, indexExpr);
-        }
-        
-        return lValueExpr;
-    }
-
     private ArrayInitExpression ParseArrayExpression()
     {
+        Location loc = CurrentToken.Loc;
         Expect(TokenType.OpenCurlyBracket, "accolade ouvrante '{' est attendue pour une expression initialiseur de tableau.");
 
         var expressions = new List<SyntaxExpression>();
@@ -380,16 +391,17 @@ public class Parser : CompilerPass
 
         Expect(TokenType.CloseCurlyBracket, "accolade fermante '}' attendue pour la fin de l'expression initialiseur de tableau.");
 
-        return new ArrayInitExpression(expressions);
+        return new ArrayInitExpression(loc, expressions);
     }
 
     private SyntaxExpression ParseBinOpExpression(int precedence = 0)
     {
-        var left = ParsePrimaryExpression();
+        Location loc = CurrentToken.Loc;
+        var left = ParseUnaryExpression();
 
         while (true)
         {
-            BinOperatorType? opType = GetBinaryOperatorType(CurrentToken.Type);
+            BinOpType? opType = GetBinaryOperatorType(CurrentToken.Type);
             if (opType == null) break;
 
             int opPrecedence = GetOperatorPrecedence(opType.Value);
@@ -399,44 +411,73 @@ public class Parser : CompilerPass
 
             var right = ParseBinOpExpression(opPrecedence + 1);
 
-            left = new BinaryOpExpression(left, right, opType.Value);
+            left = new BinaryOpExpression(loc, left, right, opType.Value);
         }
 
         return left;
     }
 
-    private static BinOperatorType? GetBinaryOperatorType(TokenType tokenType)
+    private SyntaxExpression ParseUnaryExpression()
+    {
+        Location loc = CurrentToken.Loc;
+        UnaryOpType? unaryOpType = GetUnaryOperatorType(CurrentToken.Type);
+        if (unaryOpType != null)
+        {
+            NextToken();
+
+            SyntaxExpression operand = ParseUnaryExpression();
+            return new UnaryOpExpression(loc, operand, unaryOpType.Value);
+        }
+
+        return ParsePrimaryExpression();
+    }
+
+    private static UnaryOpType? GetUnaryOperatorType(TokenType tokenType)
     {
         return tokenType switch
         {
-            TokenType.Plus => BinOperatorType.Addition,
-            TokenType.Minus => BinOperatorType.Subtraction,
-            TokenType.Asterisk => BinOperatorType.Multiplication,
-            TokenType.Slash => BinOperatorType.Division,
-            TokenType.EqualCond => BinOperatorType.Equals,
-            TokenType.NotEqualCond => BinOperatorType.NotEquals,
-            TokenType.BiggerThanCond => BinOperatorType.BiggerThan,
-            TokenType.BiggerThanEqCond => BinOperatorType.BiggerThanEq,
-            TokenType.LessThanCond => BinOperatorType.LessThan,
-            TokenType.LessThanEqCond => BinOperatorType.LessThanEq,
+            TokenType.Minus => UnaryOpType.Negation,
+            TokenType.Exclamation => UnaryOpType.Not,
+            TokenType.Ampersand => UnaryOpType.AddressOf,
+            TokenType.Star => UnaryOpType.Deference,
             _ => null
         };
     }
 
-    private static int GetOperatorPrecedence(BinOperatorType opType)
+    private static BinOpType? GetBinaryOperatorType(TokenType tokenType)
+    {
+        return tokenType switch
+        {
+            TokenType.Plus => BinOpType.Addition,
+            TokenType.Minus => BinOpType.Subtraction,
+            TokenType.Star => BinOpType.Multiplication,
+            TokenType.Slash => BinOpType.Division,
+            TokenType.Percent => BinOpType.Modulo,
+            TokenType.EqualCond => BinOpType.Equals,
+            TokenType.NotEqualCond => BinOpType.NotEquals,
+            TokenType.BiggerThanCond => BinOpType.BiggerThan,
+            TokenType.BiggerThanEqCond => BinOpType.BiggerThanEq,
+            TokenType.LessThanCond => BinOpType.LessThan,
+            TokenType.LessThanEqCond => BinOpType.LessThanEq,
+            _ => null
+        };
+    }
+
+    private static int GetOperatorPrecedence(BinOpType opType)
     {
         return opType switch
         {
-            BinOperatorType.Addition => 1,
-            BinOperatorType.Subtraction => 1,
-            BinOperatorType.Multiplication => 2,
-            BinOperatorType.Division => 2,
-            BinOperatorType.LessThan => 3,
-            BinOperatorType.LessThanEq => 3,
-            BinOperatorType.BiggerThan => 3,
-            BinOperatorType.BiggerThanEq => 3,
-            BinOperatorType.Equals => 3,
-            BinOperatorType.NotEquals => 3,
+            BinOpType.Addition => 1,
+            BinOpType.Subtraction => 1,
+            BinOpType.Modulo => 2,
+            BinOpType.LessThan => 2,
+            BinOpType.LessThanEq => 2,
+            BinOpType.BiggerThan => 2,
+            BinOpType.BiggerThanEq => 2,
+            BinOpType.Equals => 2,
+            BinOpType.NotEquals => 2,
+            BinOpType.Multiplication => 3,
+            BinOpType.Division => 3,
             _ => 0
         };
     }
@@ -450,29 +491,48 @@ public class Parser : CompilerPass
 
             return ParseVarRefExpression();
         }
+        else if (CurrentToken.Type == TokenType.OpenBracket)
+        {
+            return ParseCastExpression();
+        }
 
         return ParseLiteralExpression();
     }
 
+    private CastExpression ParseCastExpression()
+    {
+        Location loc = CurrentToken.Loc;
+        Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue pour une expression de type cast.");
+        var castedType = ParseType("le type a casté est attendu entre les parenthèses.");
+        Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue après le type du cast.");
+
+        var expr = ParseExpression();
+
+        return new CastExpression(loc, castedType, expr);
+    }
+
     private LiteralExpression ParseLiteralExpression()
     {
+        Location loc = CurrentToken.Loc;
         Token token = NextToken();
         LiteralType literalType = token.GetLiteralType();
 
         if (literalType == LiteralType.None)
             throw new CompilerDetailedException(ErrorType.SyntaxError, "le token actuel n'est pas reconnu comme étant un litéral valide.", token.Loc);
 
-        return new LiteralExpression(token, literalType);
+        return new LiteralExpression(loc, token, literalType);
     }
 
     private VarRefExpression ParseVarRefExpression()
     {
+        Location loc = CurrentToken.Loc;
         Token token = Expect(TokenType.Identifier, "un identifiant est attendu pour la référence d'une variable.");
-        return new VarRefExpression(token);
+        return new VarRefExpression(loc, token);
     }
 
     private FunCallExpression ParseFunCallExpression()
     {
+        Location loc = CurrentToken.Loc;
         Token token = Expect(TokenType.Identifier, "un identifiant est attendu pour l'appel d'une fonction.");
         Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue après le nom de la fonction a appelé.");
 
@@ -489,7 +549,7 @@ public class Parser : CompilerPass
 
         Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attentue après la définition des paramètres de la fonction.");
 
-        return new FunCallExpression(token, parameters);
+        return new FunCallExpression(loc, token, parameters);
     }
 
     private Token Expect(TokenType expectedType, string errorMessage)

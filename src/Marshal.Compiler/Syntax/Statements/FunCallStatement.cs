@@ -10,7 +10,7 @@ public class FunCallStatement : SyntaxStatement
 
     public FunctionSymbol Symbol { get; set; } = null!;
 
-    public FunCallStatement(Token nameIdentifier, List<SyntaxExpression> parameters)
+    public FunCallStatement(Location loc, Token nameIdentifier, List<SyntaxExpression> parameters) : base(loc)
     {
         Args = parameters;
         NameToken = nameIdentifier;

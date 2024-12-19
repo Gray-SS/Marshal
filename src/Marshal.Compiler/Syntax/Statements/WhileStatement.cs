@@ -5,7 +5,7 @@ public sealed class WhileStatement : SyntaxStatement
     public ScopeStatement Scope { get; }
     public SyntaxExpression CondExpr { get; }
 
-    public WhileStatement(SyntaxExpression condExpr, ScopeStatement scope)
+    public WhileStatement(Location loc, SyntaxExpression condExpr, ScopeStatement scope) : base(loc)
     {
         Scope = scope;
         CondExpr = condExpr;

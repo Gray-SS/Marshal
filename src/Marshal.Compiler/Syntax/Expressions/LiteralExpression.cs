@@ -14,7 +14,9 @@ public class LiteralExpression : SyntaxExpression
     public Token Token { get; }
     public LiteralType LiteralType { get; }
 
-    public LiteralExpression(Token token, LiteralType literalType)
+    public override ValueCategory ValueCategory => ValueCategory.Transient;
+
+    public LiteralExpression(Location loc, Token token, LiteralType literalType) : base(loc)
     {
         Token = token;
         LiteralType = literalType;

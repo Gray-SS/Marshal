@@ -118,7 +118,8 @@ public abstract class MarshalType : Symbol
     public static readonly PrimitiveType Short = new("short", true, false, 2);
     public static readonly PrimitiveType Int = new("int", true, false, 4);
     public static readonly PrimitiveType Long = new("long", true, false, 8);
-    public static readonly PrimitiveType Char = new("char", false, false, 1);
+    public static readonly PrimitiveType Float = new("float", true, false, 4);
+    public static readonly PrimitiveType Char = new("char", true, false, 1);
     public static readonly PrimitiveType Void = new("void", false, false, 0);
     public static readonly PrimitiveType Boolean = new("bool", false, true, 1);
     public static readonly TypeAlias String = new("string", CreatePointer(Char));

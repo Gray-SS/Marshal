@@ -17,7 +17,7 @@ public sealed class IfStatement : SyntaxStatement
     public List<ConditionalScope> IfsScopes { get; }
     public ScopeStatement? ElseScope { get; }
 
-    public IfStatement(List<ConditionalScope> ifScopes, ScopeStatement? elseScope)
+    public IfStatement(Location loc, List<ConditionalScope> ifScopes, ScopeStatement? elseScope) : base(loc)
     {
         IfsScopes = ifScopes;
         ElseScope = elseScope;

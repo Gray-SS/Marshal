@@ -10,7 +10,9 @@ public class FunCallExpression : SyntaxExpression
 
     public FunctionSymbol Symbol { get; set; } = null!;
 
-    public FunCallExpression(Token nameIdentifier, List<SyntaxExpression> parameters)
+    public override ValueCategory ValueCategory => ValueCategory.Transient;
+
+    public FunCallExpression(Location loc, Token nameIdentifier, List<SyntaxExpression> parameters) : base(loc)
     {
         Args = parameters;
         NameToken = nameIdentifier;

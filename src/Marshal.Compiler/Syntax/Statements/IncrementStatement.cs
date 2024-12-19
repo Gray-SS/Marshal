@@ -8,7 +8,7 @@ public class IncrementStatement : SyntaxStatement
     public Token NameToken { get; }
     public VariableSymbol Symbol { get; set; } = null!;
 
-    public IncrementStatement(Token nameToken, bool decrement)
+    public IncrementStatement(Location loc, Token nameToken, bool decrement) : base(loc)
     {
         NameToken = nameToken;
         Decrement = decrement;

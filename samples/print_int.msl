@@ -21,13 +21,3 @@ func print_int(value: int): int {
     var digit: char = rem + '0';
     putchar(digit);
 }
-
-func main(): int {
-    var x: int = 10;
-    var z: int* = &x;
-    *z = 20;
-
-    print_int(*z);
-
-    return 0;
-}

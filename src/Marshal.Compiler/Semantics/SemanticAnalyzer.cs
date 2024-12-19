@@ -36,7 +36,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
         scope.ConditionExpr.Accept(this);
         if (scope.ConditionExpr.Type != MarshalType.Boolean)
-            Report(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.");
+            ReportDetailed(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.", scope.ConditionExpr.Loc);
 
         scope.Scope.Accept(this);
     }
@@ -45,7 +45,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
         stmt.CondExpr.Accept(this);
         if (stmt.CondExpr.Type != MarshalType.Boolean)
-            Report(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.");
+            ReportDetailed(ErrorType.SemanticError, $"la condition de la déclaration conditionnelle ne retourne pas un booléen.", stmt.CondExpr.Loc);
 
         stmt.Scope.Accept(this);
     }
@@ -68,10 +68,10 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             foreach (ReturnStatement statement in returnStatements)
             {
                 if (statement != returnStatements.First())
-                    ReportDetailed(ErrorType.Warning, $"la déclaration de retour n'est jamais atteinte.", statement.ReturnKeyword.Loc);
+                    ReportDetailed(ErrorType.Warning, $"la déclaration de retour n'est jamais atteinte.", statement.Loc);
 
                 if (!IsTypeCompatible(statement.ReturnExpr.Type, function.ReturnType))
-                    ReportDetailed(ErrorType.Error, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnKeyword.Loc);
+                    ReportDetailed(ErrorType.Error, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnExpr.Loc);
             }
         }
         
@@ -86,7 +86,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             
             if (!IsTypeCompatible(stmt.Initializer.Type, stmt.Symbol.DataType))
             {
-                ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.NameToken.Loc);
+                ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.Initializer.Loc);
                 return;
             }
         }
@@ -94,12 +94,17 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
     public void Visit(AssignmentStatement stmt)
     {
+        stmt.LExpr.Accept(this);
         stmt.Initializer.Accept(this);
+
+        if (stmt.LExpr.ValueCategory != ValueCategory.Locator)
+        {
+            ReportDetailed(ErrorType.SemanticError, $"l'expression à gauche doit être une expression de type locator (pointeur, déférencement de pointeur, accès à un tableau, ect...)", stmt.LExpr.Loc);
+        }
 
         if (!IsTypeCompatible(stmt.Initializer.Type, stmt.Symbol.DataType))
         {
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.NameToken.Loc);
-            return;
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.Initializer.Loc);
         }
     }
 
@@ -107,7 +112,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
         if (!stmt.Symbol.DataType.IsNumeric) 
         {
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'incrémenter une variable non numérique '{stmt.Symbol.Name}'", stmt.NameToken.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'incrémenter une variable non numérique '{stmt.Symbol.Name}'", stmt.Loc);
         }
     }
 
@@ -120,6 +125,15 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
     public void Visit(ReturnStatement stmt)
     {
+    }
+
+    public void Visit(CastExpression expr)
+    {
+        if (expr.Type == expr.CastedExpr.Type)
+            ReportDetailed(ErrorType.Warning, $"casting non nécessaire entre '{expr.Type.Name}' et '{expr.CastedExpr.Type.Name}'.", expr.Loc);
+
+        if (!CanExplicitlyCast(expr.CastedExpr.Type, expr.Type))
+            ReportDetailed(ErrorType.Error, $"impossible de cast une expression de type '{expr.CastedExpr.Type.Name}' en '{expr.Type.Name}'", expr.Loc);
     }
 
     public void Visit(FunCallExpression expr)
@@ -139,6 +153,10 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     }
 
     public void Visit(BinaryOpExpression expr)
+    {
+    }
+
+    public void Visit(UnaryOpExpression expr)
     {
     }
 
@@ -164,15 +182,29 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
         for (int i = 0; i < function.Params.Count; i++)
         {
-            var stmtParam = args[i];
-            var functionParam = function.Params[i];
+            SyntaxExpression paramExpr = args[i];
+            VariableSymbol paramSymbol = function.Params[i];
 
-            if (!IsTypeCompatible(functionParam.DataType, stmtParam.Type))
+            if (!IsTypeCompatible(paramSymbol.DataType, paramExpr.Type))
             {
-                ReportDetailed(ErrorType.SemanticError, $"l'argument '{functionParam.Name}' de la fonction '{function.Name}' attendait une expression de type '{functionParam.DataType.Name}' mais un argument de type '{stmtParam.Type.Name}' a été reçu.", functionLoc);
+                ReportDetailed(ErrorType.SemanticError, $"l'argument '{paramSymbol.Name}' de la fonction '{function.Name}' attendait une expression de type '{paramSymbol.DataType.Name}' mais un argument de type '{paramExpr.Type.Name}' a été reçu.", paramExpr.Loc);
                 continue;
             }
         }
+    }
+
+    private static bool CanExplicitlyCast(MarshalType from, MarshalType to)
+    {
+        if (from.IsNumeric && to.IsNumeric)
+            return true;
+
+        if (from is PointerType && to.IsNumeric && ((PointerType)from).Pointee.IsNumeric)
+            return true;
+
+        if (from is PointerType && to is PointerType && ((PointerType)from).Pointee.IsNumeric && ((PointerType)to).Pointee.IsNumeric)
+            return true;
+
+        return false;
     }
 
     private static bool IsTypeCompatible(MarshalType left, MarshalType right)

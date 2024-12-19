@@ -164,7 +164,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
             throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
 
-        stmt.LValue.Accept(this);
+        stmt.LExpr.Accept(this);
         stmt.Initializer.Accept(this);
         stmt.Symbol = symbol;
     }
@@ -198,20 +198,71 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         stmt.ReturnExpr.Accept(this);
     }
 
+    public void Visit(CastExpression expr)
+    {
+        var type = ResolveType(expr.CastedType);
+        expr.CastedExpr.Accept(this);
+
+        expr.Type = type;
+    }
+
+    public void Visit(UnaryOpExpression expr)
+    {
+        expr.Operand.Accept(this);
+
+        if (expr.Operation.IsNumericOperation())
+        {
+            if (!expr.Operand.Type.IsNumeric)
+                throw new CompilerException(ErrorType.SemanticError, $"opération invalide '{expr.Operation}' pour l'expression de type non numérique '{expr.Operand.Type.Name}'.");
+
+            expr.Type = expr.Operand.Type;
+        }
+        else if (expr.Operation.IsComparisonOperation())
+        {
+            if (expr.Operand.Type != MarshalType.Boolean)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"opération invalide '{expr.Operation}' pour l'expression de type non booléenne '{expr.Operand.Type.Name}'.", expr.Operand.Loc);
+        
+            expr.Type = MarshalType.Boolean;
+        }
+        else if (expr.Operation == UnaryOpType.AddressOf)
+        {
+            expr.Type = MarshalType.CreatePointer(expr.Operand.Type);
+        }
+        else if (expr.Operation == UnaryOpType.Deference)
+        {
+            if (expr.Operand.ValueCategory != ValueCategory.Locator)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"déférencement invalide, '{expr.Operand.Type.Name}' n'est pas un locator.", expr.Operand.Loc);
+
+            MarshalType operandType = expr.Operand.Type;
+            if (!operandType.IsPointer && !operandType.IsArray)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"déférencement invalide pour le type '{operandType.Name}', le type déférencé doit être un pointeur ou un tableau.", expr.Operand.Loc);
+
+            MarshalType type;
+            if (operandType is PointerType pointer)
+                type = pointer.Pointee;
+            else if (operandType is ArrayType array)
+                type = array.ElementType;
+            else
+                throw new NotImplementedException($"Deferencement for type '{operandType.Name}' is not supported.");
+
+            expr.Type = type; 
+        }
+        else throw new NotImplementedException($"Unary operation not implemented '{expr.Operation}'.");
+    }
 
     public void Visit(BinaryOpExpression expr)
     {
         expr.Left.Accept(this);
         expr.Right.Accept(this);
 
-        if (expr.OpType.IsNumericBinOpType())
+        if (expr.Operation.IsNumericOperation())
         {
             if (!expr.Left.Type.IsNumeric || !expr.Right.Type.IsNumeric)
-                throw new CompilerException(ErrorType.SemanticError, $"opération invalide '{expr.OpType}' entre type non numérique '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
+                throw new CompilerException(ErrorType.SemanticError, $"opération invalide '{expr.Operation}' entre type non numérique '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
 
             expr.Type = GetWiderType(expr.Left.Type, expr.Right.Type);
         }
-        else if (expr.OpType.IsCompBinOpType())
+        else if (expr.Operation.IsComparisonOperation())
         {
             if (!AreComparableTypes(expr.Left.Type, expr.Right.Type))
                 throw new CompilerException(ErrorType.SemanticError, $"comparaison immpossible entre une valeur de type '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");

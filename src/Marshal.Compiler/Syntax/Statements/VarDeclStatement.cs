@@ -13,7 +13,7 @@ public class VarDeclStatement : SyntaxStatement
 
     public VariableSymbol Symbol { get; set; } = null!;
 
-    public VarDeclStatement(Token nameIdentifier, SyntaxTypeNode syntaxType, SyntaxExpression? initExpression)
+    public VarDeclStatement(Location loc, Token nameIdentifier, SyntaxTypeNode syntaxType, SyntaxExpression? initExpression) : base(loc)
     {
         SyntaxType = syntaxType;
         NameToken = nameIdentifier;

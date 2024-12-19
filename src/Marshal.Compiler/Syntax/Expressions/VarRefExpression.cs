@@ -8,7 +8,9 @@ public class VarRefExpression : SyntaxExpression
 
     public VariableSymbol Symbol { get; set; } = null!;
 
-    public VarRefExpression(Token nameIdentifier)
+    public override ValueCategory ValueCategory => ValueCategory.Locator;
+
+    public VarRefExpression(Location loc, Token nameIdentifier) : base(loc)
     {
         NameToken = nameIdentifier;
     }

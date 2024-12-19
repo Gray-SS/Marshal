@@ -1,11 +1,12 @@
 namespace Marshal.Compiler.Syntax.Statements;
 
-public enum BinOperatorType
+public enum BinOpType
 {
     Addition,
     Subtraction,
     Multiplication,
     Division,
+    Modulo,
 
     Equals,
     NotEquals,
@@ -21,13 +22,15 @@ public sealed class BinaryOpExpression : SyntaxExpression
 
     public SyntaxExpression Right { get; }
 
-    public BinOperatorType OpType { get; }
+    public BinOpType Operation { get; }
 
-    public BinaryOpExpression(SyntaxExpression left, SyntaxExpression right, BinOperatorType opType)
+    public override ValueCategory ValueCategory => ValueCategory.Transient;
+
+    public BinaryOpExpression(Location loc, SyntaxExpression left, SyntaxExpression right, BinOpType opType) : base(loc)
     {
         Left = left;
         Right = right;
-        OpType = opType;
+        Operation = opType;
     }
 
     public override void Accept(IASTVisitor visitor)

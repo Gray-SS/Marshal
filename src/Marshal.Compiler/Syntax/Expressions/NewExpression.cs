@@ -1,12 +1,10 @@
-using Marshal.Compiler.Semantics;
-
 namespace Marshal.Compiler.Syntax.Expressions;
 
 public abstract class NewExpression : SyntaxExpression
 {
     public Token TypeName { get; }
 
-    public NewExpression(Token typeName)
+    public NewExpression(Location loc, Token typeName) : base(loc)
     {
         TypeName = typeName;
     } 
@@ -20,8 +18,9 @@ public abstract class NewExpression : SyntaxExpression
 public class NewArrayExpression : NewExpression
 {
     public SyntaxExpression LengthExpr { get; }
+    public override ValueCategory ValueCategory => ValueCategory.Transient;
 
-    public NewArrayExpression(Token typeName, SyntaxExpression lengthExpr) : base(typeName)
+    public NewArrayExpression(Location loc, Token typeName, SyntaxExpression lengthExpr) : base(loc, typeName)
     {
         LengthExpr = lengthExpr;
     }

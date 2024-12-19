@@ -114,12 +114,14 @@ public class Lexer : CompilerPass
             {
                 case '+': tokens.Add(ReadToken(TokenType.Plus, 1)); break;
                 case '-': tokens.Add(ReadToken(TokenType.Minus, 1)); break;
-                case '*': tokens.Add(ReadToken(TokenType.Asterisk, 1)); break;
+                case '*': tokens.Add(ReadToken(TokenType.Star, 1)); break;
                 case '/': tokens.Add(ReadToken(TokenType.Slash, 1)); break;
                 case '_': tokens.Add(ReadToken(TokenType.Underscore, 1)); break;
+                case '%': tokens.Add(ReadToken(TokenType.Percent, 1)); break;
+                case '&': tokens.Add(ReadToken(TokenType.Ampersand, 1)); break;
                 case '!':
                     if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.NotEqualCond, 2)); 
-                    else tokens.Add(ReadToken(TokenType.ExclamationMark, 1)); 
+                    else tokens.Add(ReadToken(TokenType.Exclamation, 1)); 
                     break;
                 case '=':
                     if (Peek(1) == '=') tokens.Add(ReadToken(TokenType.EqualCond, 2));

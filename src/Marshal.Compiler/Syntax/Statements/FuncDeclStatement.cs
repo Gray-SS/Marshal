@@ -17,7 +17,7 @@ public class FuncDeclStatement : SyntaxStatement
 
     public ScopeStatement? Body { get; }
 
-    public FuncDeclStatement(Token nameToken, SyntaxTypeNode syntaxReturnType, List<FuncParamDeclNode> parameters, ScopeStatement? body, bool isExtern)
+    public FuncDeclStatement(Location loc, Token nameToken, SyntaxTypeNode syntaxReturnType, List<FuncParamDeclNode> parameters, ScopeStatement? body, bool isExtern) : base(loc)
     {
         NameToken = nameToken;
         SyntaxReturnType = syntaxReturnType;

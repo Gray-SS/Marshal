@@ -5,7 +5,7 @@ public class ReturnStatement : SyntaxStatement
     public Token ReturnKeyword { get; }
     public SyntaxExpression ReturnExpr { get; }    
 
-    public ReturnStatement(Token returnKeyword, SyntaxExpression returnExpr)
+    public ReturnStatement(Location loc, Token returnKeyword, SyntaxExpression returnExpr) : base(loc)
     {
         ReturnExpr = returnExpr;
         ReturnKeyword = returnKeyword;

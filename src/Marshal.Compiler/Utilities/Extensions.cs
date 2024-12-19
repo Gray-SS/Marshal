@@ -19,31 +19,51 @@ public static class Extensions
             _ => LiteralType.None,
         };
     }
-    public static bool IsNumericBinOpType(this BinOperatorType binOpType)
-    {
-        return binOpType switch
-        {
-            BinOperatorType.Addition => true,
-            BinOperatorType.Division => true,
-            BinOperatorType.Multiplication => true,
-            BinOperatorType.Subtraction => true,
 
-            _ => false,
+    public static bool IsNumericOperation(this UnaryOpType operation)
+    {
+        return operation switch
+        {
+            UnaryOpType.Negation => true,
+            _ => false
         };
     }
 
-    public static bool IsCompBinOpType(this BinOperatorType binOpType)
+    public static bool IsComparisonOperation(this UnaryOpType operation)
     {
-        return binOpType switch
+        return operation switch
         {
-            BinOperatorType.LessThan => true,
-            BinOperatorType.LessThanEq => true,
-            BinOperatorType.BiggerThan => true,
-            BinOperatorType.BiggerThanEq => true,
-            BinOperatorType.Equals => true,
-            BinOperatorType.NotEquals => true,
+            UnaryOpType.Not => true,
+            _ => false
+        };
+    }
 
-            _ => false,
+    public static bool IsNumericOperation(this BinOpType operation)
+    {
+        return operation switch
+        {
+            BinOpType.Addition => true,
+            BinOpType.Division => true,
+            BinOpType.Multiplication => true,
+            BinOpType.Subtraction => true,
+            BinOpType.Modulo => true,
+
+            _ => false
+        };
+    }
+
+    public static bool IsComparisonOperation(this BinOpType operation)
+    {
+        return operation switch
+        {
+            BinOpType.LessThan => true,
+            BinOpType.LessThanEq => true,
+            BinOpType.BiggerThan => true,
+            BinOpType.BiggerThanEq => true,
+            BinOpType.Equals => true,
+            BinOpType.NotEquals => true,
+
+            _ => false
         };
     }
 }
