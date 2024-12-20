@@ -18,6 +18,13 @@ public class FunCallExpression : SyntaxExpression
         NameToken = nameIdentifier;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(FunCallExpression)}:{NameToken.Value}]", level);
+        foreach (SyntaxExpression expr in Args)
+            expr.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

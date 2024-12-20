@@ -14,6 +14,13 @@ public class ArrayAccessExpression : SyntaxExpression
         IndexExpr = indexExpr;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(ArrayAccessExpression)}]", level);
+        ArrayExpr.Dump(level + 1);
+        IndexExpr.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

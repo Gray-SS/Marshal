@@ -424,6 +424,12 @@ public class IRGenerator : CompilerPass, IASTVisitor
         _valueStack.Push(result);
     }
 
+    public void Visit(BracketExpression expr)
+    {
+        ValueRef value = EvaluateExpr(expr.Expression, false);
+        _valueStack.Push(value);
+    }
+
     public void Visit(BinaryOpExpression expr)
     {
         ValueRef left = EvaluateExpr(expr.Left);
@@ -501,7 +507,11 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         if (_variables.TryGetValue(var.Name, out Variable? variable))
         {
-            _valueStack.Push(variable.Pointer);
+            ValueRef pointer = variable.Pointer;
+            if (var.DataType.IsReferenced)
+                pointer = LLVM.BuildLoad(_builder, pointer, $"ref_ptr");
+
+            _valueStack.Push(pointer);
         }
         else if (_params.TryGetValue(var.Name, out Param? param))
         {
@@ -529,7 +539,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(ArrayAccessExpression expr)
     {
-        ValueRef indexorPtr = EvaluateExpr(expr.ArrayExpr, loadLocator: false);
+        ValueRef indexorPtr = EvaluateExpr(expr.ArrayExpr, false);
         ValueRef indexValue = EvaluateExpr(expr.IndexExpr);
 
         ValueRef elementPtr = LLVM.BuildGEP(_builder, indexorPtr, [ indexValue ], "array_iptr");
@@ -568,7 +578,6 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         if (expr.ValueCategory == ValueCategory.Locator && loadLocator)
         {
-            System.Console.WriteLine($"[{expr.GetType().Name}:{expr.ValueCategory}] Loading the locator.");
             value = LLVM.BuildLoad(_builder, value, "locator_load");
         }
 

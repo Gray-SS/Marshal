@@ -23,6 +23,19 @@ public sealed class IfStatement : SyntaxStatement
         ElseScope = elseScope;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(IfStatement)}]", level);
+        foreach (ConditionalScope scope in IfsScopes)
+        {
+            Dump($"[{nameof(ConditionalScope)}]", level + 1);
+            scope.ConditionExpr.Dump(level + 2);
+            scope.Scope.Dump(level + 2);
+        }
+
+        ElseScope?.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

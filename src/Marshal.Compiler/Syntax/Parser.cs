@@ -17,6 +17,7 @@ public class Parser : CompilerPass
     public override void Apply()
     {
         Context.AST = ParseAST();
+        Context.AST.Dump();
     }
 
     public CompilationUnit ParseAST()
@@ -327,21 +328,20 @@ public class Parser : CompilerPass
         SyntaxExpression expr = CurrentToken.Type switch {
             TokenType.OpenCurlyBracket => ParseArrayExpression(),
             TokenType.NewKeyword => ParseNewExpression(),
-
             _ => ParseBinOpExpression(),
         };
 
-        if (CurrentToken.Type == TokenType.OpenSquareBracket)
-        {
-            //Parse an array access expression
-            NextToken();
-            SyntaxExpression indexExpr = ParseExpression();
-            Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'index de l'accès au tableau.");
-
-            expr = new ArrayAccessExpression(loc, expr, indexExpr);
-        }
-
         return expr;
+    }
+
+    private BracketExpression ParseBracketExpression()
+    {
+        Location loc = CurrentToken.Loc;
+        Expect(TokenType.OpenBracket, "une parenthèse ouvrante '(' est attendue pour une expression entre parenthèse.");
+        SyntaxExpression expr = ParseExpression();
+        Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue pour une expression entre parenthèse.");
+
+        return new BracketExpression(loc, expr);
     }
 
     private NewExpression ParseNewExpression()
@@ -491,12 +491,27 @@ public class Parser : CompilerPass
 
             return ParseVarRefExpression();
         }
-        else if (CurrentToken.Type == TokenType.OpenBracket)
+        else if (CurrentToken.Type == TokenType.OpenBracket && Peek(1).Type == TokenType.Identifier)
         {
             return ParseCastExpression();
         }
+        else if (CurrentToken.Type == TokenType.OpenBracket)
+        {
+            return ParseBracketExpression();
+        }
 
         return ParseLiteralExpression();
+    }
+
+    private ArrayAccessExpression ParseArrayAccessExpression(SyntaxExpression expr)
+    {
+        Location loc = CurrentToken.Loc;
+
+        NextToken();
+        SyntaxExpression indexExpr = ParseExpression();
+        Expect(TokenType.CloseSquareBracket, "une parenthèse carrée fermante ']' est attendue après l'index de l'accès au tableau.");
+
+        return new ArrayAccessExpression(loc, expr, indexExpr);
     }
 
     private CastExpression ParseCastExpression()
@@ -523,11 +538,18 @@ public class Parser : CompilerPass
         return new LiteralExpression(loc, token, literalType);
     }
 
-    private VarRefExpression ParseVarRefExpression()
+    private SyntaxExpression ParseVarRefExpression()
     {
         Location loc = CurrentToken.Loc;
         Token token = Expect(TokenType.Identifier, "un identifiant est attendu pour la référence d'une variable.");
-        return new VarRefExpression(loc, token);
+
+        SyntaxExpression expr = new VarRefExpression(loc, token);
+        while (CurrentToken.Type == TokenType.OpenSquareBracket)
+        {
+            expr = ParseArrayAccessExpression(expr);
+        }
+
+        return expr;
     }
 
     private FunCallExpression ParseFunCallExpression()

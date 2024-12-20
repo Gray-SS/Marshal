@@ -10,6 +10,15 @@ public class ScopeStatement : SyntaxStatement
         Statements = statements;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(ScopeStatement)}]", level);
+        foreach (SyntaxStatement stmt in Statements)
+        {
+            stmt.Dump(level + 1);
+        }
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

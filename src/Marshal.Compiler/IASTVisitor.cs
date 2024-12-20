@@ -26,9 +26,11 @@ public interface IASTVisitor
 
     void Visit(VarDeclStatement stmt);
     
-    void Visit(CastExpression expr);
+    void Visit(CastExpression expr); 
 
     void Visit(UnaryOpExpression expr);
+
+    void Visit(BracketExpression expr);
 
     void Visit(BinaryOpExpression expr);
 

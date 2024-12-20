@@ -7,7 +7,7 @@ public abstract class NewExpression : SyntaxExpression
     public NewExpression(Location loc, Token typeName) : base(loc)
     {
         TypeName = typeName;
-    } 
+    }
 
     public override void Accept(IASTVisitor visitor)
     {
@@ -23,5 +23,11 @@ public class NewArrayExpression : NewExpression
     public NewArrayExpression(Location loc, Token typeName, SyntaxExpression lengthExpr) : base(loc, typeName)
     {
         LengthExpr = lengthExpr;
+    }
+
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(NewArrayExpression)}]", level);
+        LengthExpr.Dump(level + 1);      
     }
 }

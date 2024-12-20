@@ -13,6 +13,12 @@ public sealed class CastExpression : SyntaxExpression
         CastedExpr = castedExpr;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(CastExpression)}:{CastedType.DisplayName}]", level);
+        CastedExpr.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

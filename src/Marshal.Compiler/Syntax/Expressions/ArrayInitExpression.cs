@@ -10,6 +10,11 @@ public class ArrayInitExpression : SyntaxExpression
         Expressions = expressions;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(ArrayInitExpression)}]", level);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

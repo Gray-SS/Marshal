@@ -11,6 +11,12 @@ public class ReturnStatement : SyntaxStatement
         ReturnKeyword = returnKeyword;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(ReturnStatement)}]", level);
+        ReturnExpr.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

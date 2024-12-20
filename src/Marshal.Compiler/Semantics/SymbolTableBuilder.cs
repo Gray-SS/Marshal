@@ -250,6 +250,12 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         else throw new NotImplementedException($"Unary operation not implemented '{expr.Operation}'.");
     }
 
+    public void Visit(BracketExpression expr)
+    {
+        expr.Expression.Accept(this);
+        expr.Type = expr.Expression.Type;
+    }
+
     public void Visit(BinaryOpExpression expr)
     {
         expr.Left.Accept(this);

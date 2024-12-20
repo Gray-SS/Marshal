@@ -21,6 +21,12 @@ public class UnaryOpExpression : SyntaxExpression
         Operation = operation;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(UnaryOpExpression)}:{Operation}]", level);
+        Operand.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

@@ -15,6 +15,11 @@ public class VarRefExpression : SyntaxExpression
         NameToken = nameIdentifier;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(VarRefExpression)}:{NameToken.Value}]", level);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

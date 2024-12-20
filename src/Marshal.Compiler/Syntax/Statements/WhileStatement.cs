@@ -11,6 +11,13 @@ public sealed class WhileStatement : SyntaxStatement
         CondExpr = condExpr;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(WhileStatement)}]", level);
+        CondExpr.Dump(level + 1);
+        Scope.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

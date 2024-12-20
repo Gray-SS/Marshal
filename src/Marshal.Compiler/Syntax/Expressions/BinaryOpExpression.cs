@@ -33,6 +33,13 @@ public sealed class BinaryOpExpression : SyntaxExpression
         Operation = opType;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(BinaryOpExpression)}:{Operation}]", level);
+        Left.Dump(level + 1);
+        Right.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

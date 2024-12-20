@@ -26,6 +26,12 @@ public class FuncDeclStatement : SyntaxStatement
         Body = body;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(FuncDeclStatement)}:{NameToken.Value}:({string.Join(',', Params.Select(x => x.NameToken.Value))})]: {SyntaxReturnType.DisplayName}", level);
+        Body?.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

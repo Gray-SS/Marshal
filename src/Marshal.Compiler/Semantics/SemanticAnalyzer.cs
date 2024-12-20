@@ -152,6 +152,10 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
     }
 
+    public void Visit(BracketExpression expr)
+    {
+    }
+
     public void Visit(BinaryOpExpression expr)
     {
     }

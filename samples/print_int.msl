@@ -1,23 +1,20 @@
 func extern putchar(c: char): int;
 
 func print_int(value: int): int {
-    var v: int = value;
-
-    if (v == 0) {
+    if (value == 0) {
         putchar('0');
         return 0;
     }
 
-    if (v < 0) {
+    if (value < 0) {
         putchar('-');
-        v = -v;
+        value = -value;
     }
 
-    if (v / 10 != 0) {
-        print_int(v / 10);
+    if (value / 10 != 0) {
+        print_int(value / 10);
     }
 
-    var rem: int = v % 10;
-    var digit: char = rem + '0';
+    var digit: char = value % 10 + '0';
     putchar(digit);
 }

@@ -22,6 +22,11 @@ public class LiteralExpression : SyntaxExpression
         LiteralType = literalType;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(LiteralExpression)}:{LiteralType}:\"{Token.Value}\"]", level);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

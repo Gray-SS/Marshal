@@ -20,6 +20,12 @@ public class VarDeclStatement : SyntaxStatement
         Initializer = initExpression;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{nameof(VarDeclStatement)}:{VarName}]: {SyntaxType.DisplayName}", level);
+        Initializer?.Dump(level + 1);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);

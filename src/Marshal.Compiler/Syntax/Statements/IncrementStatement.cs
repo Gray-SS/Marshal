@@ -14,6 +14,11 @@ public class IncrementStatement : SyntaxStatement
         Decrement = decrement;
     }
 
+    public override void Dump(int level = 0)
+    {
+        Dump($"[{(Decrement ? "Decrement" : "Increment")}:{NameToken.Value}]", level);
+    }
+
     public override void Accept(IASTVisitor visitor)
     {
         visitor.Visit(this);
