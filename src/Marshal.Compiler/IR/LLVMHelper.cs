@@ -4,8 +4,9 @@ namespace Marshal.Compiler.IR;
 
 public static class LLVMHelper
 {
-    public static readonly ValueRef ZeroInt = LLVM.ConstInt(LLVM.Int32Type(), 0, false);
-    public static readonly ValueRef OneInt = LLVM.ConstInt(LLVM.Int32Type(), 1, false);
+    public static readonly ValueRef ZeroInt = LLVM.ConstInt(LLVM.Int32Type(), 0, true);
+    public static readonly ValueRef OneInt = LLVM.ConstInt(LLVM.Int32Type(), 1, true);
+    public static readonly ValueRef MinusOneInt = LLVM.ConstInt(LLVM.Int32Type(), 0xFFFFFFFF, true);
 
     public static void BuildIncrement(BuilderRef builder, ValueRef varPtr)
     {

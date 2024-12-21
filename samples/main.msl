@@ -1,9 +1,8 @@
 func extern putchar(c: char): int;
 
-func print_int(value: int): int {
+proc print_int(value: int) {
     if (value == 0) {
         putchar('0');
-        return 0;
     }
 
     if (value < 0) {
@@ -20,11 +19,10 @@ func print_int(value: int): int {
 }
 
 func main(): int {
-    var x: int[] = new int[5];
-    x[2] = 30;
+    var str: string = "Hello World !";
+    var p: char* = &str[2];
 
-    var ptr: int* = &x[2];
-    print_int(*ptr);
+    putchar(*p);
 
     return 0;
 }

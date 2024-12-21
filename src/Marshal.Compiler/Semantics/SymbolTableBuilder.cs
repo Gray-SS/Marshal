@@ -160,13 +160,8 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     public void Visit(AssignmentStatement stmt)
     {
-        string variableName = stmt.NameToken.Value;
-        if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
-            throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
-
         stmt.LExpr.Accept(this);
         stmt.Initializer.Accept(this);
-        stmt.Symbol = symbol;
     }
 
     public void Visit(IncrementStatement stmt)
@@ -195,7 +190,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     public void Visit(ReturnStatement stmt)
     {
-        stmt.ReturnExpr.Accept(this);
+        stmt.ReturnExpr?.Accept(this);
     }
 
     public void Visit(CastExpression expr)
@@ -230,12 +225,9 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         }
         else if (expr.Operation == UnaryOpType.Deference)
         {
-            if (expr.Operand.ValueCategory != ValueCategory.Locator)
-                throw new CompilerDetailedException(ErrorType.SemanticError, $"déférencement invalide, '{expr.Operand.Type.Name}' n'est pas un locator.", expr.Operand.Loc);
-
             MarshalType operandType = expr.Operand.Type;
-            if (!operandType.IsPointer && !operandType.IsArray)
-                throw new CompilerDetailedException(ErrorType.SemanticError, $"déférencement invalide pour le type '{operandType.Name}', le type déférencé doit être un pointeur ou un tableau.", expr.Operand.Loc);
+            if (!operandType.IsPointer)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"déférencement invalide pour le type '{operandType.Name}' car le type déférencé doit être un pointeur.", expr.Operand.Loc);
 
             MarshalType type;
             if (operandType is PointerType pointer)
@@ -245,7 +237,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             else
                 throw new NotImplementedException($"Deferencement for type '{operandType.Name}' is not supported.");
 
-            expr.Type = type; 
+            expr.Type = type;
         }
         else throw new NotImplementedException($"Unary operation not implemented '{expr.Operation}'.");
     }
@@ -429,8 +421,8 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     private MarshalType ResolveType(SyntaxTypeNode node)
     {
-        if (!Context.SymbolTable.HasSymbol(node.Name, SymbolType.Type))
-            throw new CompilerException(ErrorType.SemanticError, $"le type '{node.Name}' n'a pas été reconnu comme étant un type valide.");
+        if (!Context.SymbolTable.HasSymbol(node.BaseName, SymbolType.Type))
+            throw new CompilerException(ErrorType.SemanticError, $"le type '{node.BaseName}' n'a pas été reconnu comme étant un type valide.");
 
         return ResolveTypeRec(node);    
     }

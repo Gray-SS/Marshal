@@ -48,6 +48,8 @@ public class Parser : CompilerPass
     {
         if (CurrentToken.Type == TokenType.FuncKeyword)
             return ParseFuncDeclStatement();
+        else if (CurrentToken.Type == TokenType.ProcKeyword)
+            return ParseProcDeclStatement();
         else if (CurrentToken.Type == TokenType.IfKeyword)
             return ParseIfStatement();
         else if (CurrentToken.Type == TokenType.WhileKeyword)
@@ -56,7 +58,7 @@ public class Parser : CompilerPass
             return ParseReturnStatement();
         else if (CurrentToken.Type == TokenType.VarKeyword)
             return ParseVarDeclStatement();
-        else if (CurrentToken.Type == TokenType.Star && Peek(1).Type == TokenType.Identifier)
+        else if (GetUnaryOperatorType(CurrentToken.Type).HasValue)
             return ParseAssignmentStatement();
         else if (CurrentToken.Type == TokenType.Identifier)
         {
@@ -155,13 +157,12 @@ public class Parser : CompilerPass
         if (locatorExpr.ValueCategory != ValueCategory.Locator)
             throw new CompilerDetailedException(ErrorType.SyntaxError, $"une expression de type locator est attendue pour la partie gauche de l'assignement.", locatorExpr.Loc);
 
-        Token identifierToken = GetIdentifierToken(locatorExpr);
         Expect(TokenType.Equal, "signe égale '=' attendu après l'identifiant de la variable.");
 
         SyntaxExpression assignExpr = ParseExpression();
         Expect(TokenType.SemiColon, "point-virgule ';' attendu après l'assignement d'une variable.");
 
-        return new AssignmentStatement(loc, identifierToken, locatorExpr, assignExpr);
+        return new AssignmentStatement(loc, locatorExpr, assignExpr);
     }
 
     private static Token GetIdentifierToken(SyntaxExpression expr)
@@ -174,6 +175,48 @@ public class Parser : CompilerPass
             return GetIdentifierToken(unaryOpExpr.Operand);
 
         throw new InvalidOperationException("Couldn't find the identifier token.");
+    }
+
+    private FuncDeclStatement ParseProcDeclStatement()
+    {
+        Location loc = CurrentToken.Loc;
+        Expect(TokenType.ProcKeyword, "mot clé 'proc' attendu pour la déclaration de procédure.");
+
+        bool isExtern = false;
+        if (CurrentToken.Type == TokenType.ExternKeyword)
+        {
+            NextToken();
+            isExtern = true;
+        }
+
+        Token nameIdentifier = Expect(TokenType.Identifier, "identifiant de procédure attendu après 'func'.");
+        
+        Expect(TokenType.OpenBracket, "parenthèse ouvrante '(' attendue après le nom de la procédure.");
+        
+        var parameters = new List<FuncParamDeclNode>();
+        while (CurrentToken.Type != TokenType.EOF && 
+               CurrentToken.Type != TokenType.CloseBracket)
+        {
+            Token pNameId = Expect(TokenType.Identifier, "le nom du paramètre est attendu.");
+            Expect(TokenType.Colon, "une colonne ':' est attendu après le nom du paramètre.");
+            SyntaxTypeNode pTypeId = ParseType("le type du paramètre est attendu.");
+            parameters.Add(new FuncParamDeclNode(pTypeId, pNameId));
+
+            if (CurrentToken.Type == TokenType.Comma) NextToken();
+            else break;
+        }
+        
+        Expect(TokenType.CloseBracket, "parenthèse fermante ')' attendue après la liste des paramètres.");
+
+        ScopeStatement? body = null;
+        if (CurrentToken.Type != TokenType.SemiColon)
+        {
+            body = ParseScopeStatement() ?? throw new CompilerException(ErrorType.SyntaxError, "le corps de la procédure est vide ou incorrect.");
+        }
+        else NextToken();
+
+        var returnType = new SyntaxPrimitiveType("void");
+        return new FuncDeclStatement(loc, nameIdentifier, returnType, parameters, body, isExtern);
     }
 
     private FuncDeclStatement ParseFuncDeclStatement()
@@ -268,7 +311,7 @@ public class Parser : CompilerPass
     private SyntaxTypeNode ParsePrimitiveType(string errorMessage)
     {
         Token identifier = Expect(TokenType.Identifier, errorMessage);
-        return new SyntaxPrimitiveType(identifier);
+        return new SyntaxPrimitiveType(identifier.Value);
     }
 
     private FunCallStatement ParseFunCallStatement()
@@ -299,9 +342,12 @@ public class Parser : CompilerPass
         Location loc = CurrentToken.Loc;
         Token returnKeyword = Expect(TokenType.ReturnKeyword, "mot clé 'return' attendu pour la déclaration de retour.");
 
-        SyntaxExpression returnExpr = ParseExpression();
-        Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration de retour.");
 
+        SyntaxExpression? returnExpr = null;
+        if (CurrentToken.Type != TokenType.SemiColon)
+            returnExpr = ParseExpression();
+
+        Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration de retour.");
         return new ReturnStatement(loc, returnKeyword, returnExpr);
     }
 
@@ -324,7 +370,6 @@ public class Parser : CompilerPass
 
     private SyntaxExpression ParseExpression()
     {
-        Location loc = CurrentToken.Loc;
         SyntaxExpression expr = CurrentToken.Type switch {
             TokenType.OpenCurlyBracket => ParseArrayExpression(),
             TokenType.NewKeyword => ParseNewExpression(),
@@ -491,16 +536,25 @@ public class Parser : CompilerPass
 
             return ParseVarRefExpression();
         }
-        else if (CurrentToken.Type == TokenType.OpenBracket && Peek(1).Type == TokenType.Identifier)
-        {
-            return ParseCastExpression();
-        }
         else if (CurrentToken.Type == TokenType.OpenBracket)
         {
+            if (Peek(1).Type == TokenType.Identifier && Peek(2).Type == TokenType.CloseBracket)
+            {
+                if (Peek(3).Type == TokenType.Identifier || IsExpressionStart(Peek(3)))
+                {
+                    return ParseCastExpression();
+                }
+            }
+
             return ParseBracketExpression();
         }
 
         return ParseLiteralExpression();
+    }
+
+    private bool IsExpressionStart(Token token)
+    {
+        return token.Type == TokenType.Identifier || token.Type == TokenType.OpenBracket || token.Type.ToString().EndsWith("Literal");
     }
 
     private ArrayAccessExpression ParseArrayAccessExpression(SyntaxExpression expr)

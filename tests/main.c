@@ -1,10 +1,8 @@
-typedef struct {
-} test_t;
+#include <stdio.h>
 
 int main() {
-    test_t x;
-    test_t* y = &x;
+    char str[16] = "Hello World !";
+    putchar(&str[0]);
 
-    test_t z = (test_t)y;
     return 0;
 }

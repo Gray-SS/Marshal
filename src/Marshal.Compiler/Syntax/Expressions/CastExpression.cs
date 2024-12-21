@@ -15,7 +15,7 @@ public sealed class CastExpression : SyntaxExpression
 
     public override void Dump(int level = 0)
     {
-        Dump($"[{nameof(CastExpression)}:{CastedType.DisplayName}]", level);
+        Dump($"[{nameof(CastExpression)}:{CastedType.Name}]", level);
         CastedExpr.Dump(level + 1);
     }
 

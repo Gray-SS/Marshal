@@ -22,7 +22,7 @@ public class VarDeclStatement : SyntaxStatement
 
     public override void Dump(int level = 0)
     {
-        Dump($"[{nameof(VarDeclStatement)}:{VarName}]: {SyntaxType.DisplayName}", level);
+        Dump($"[{nameof(VarDeclStatement)}:{VarName}]: {SyntaxType.Name}", level);
         Initializer?.Dump(level + 1);
     }
 

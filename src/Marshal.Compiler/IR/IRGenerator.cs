@@ -27,7 +27,17 @@ public class Function
     }
 }
 
-public class Param
+public interface INamedValue 
+{
+    string Name { get; }
+    TypeRef Type { get; }
+    ValueRef Pointer { get; }
+
+    ValueRef Load(BuilderRef builder);
+    ValueRef GetDataPointer(BuilderRef builder);
+}
+
+public class Param : INamedValue
 {
     public string Name { get; }
     public TypeRef Type { get; }
@@ -39,9 +49,20 @@ public class Param
         Type = type;
         Pointer = pointer;
     }
+
+    public ValueRef GetDataPointer(BuilderRef _)
+    {
+        return Pointer;
+    }
+
+    public ValueRef Load(BuilderRef builder)
+    {
+        ValueRef value = LLVM.BuildLoad(builder, Pointer, $"param_load");
+        return value;
+    }
 }
 
-public class Variable
+public class Variable : INamedValue
 {
     public string Name => Symbol.Name;
 
@@ -53,11 +74,6 @@ public class Variable
     {
         Symbol = symbol;
         Type = type;
-    }
-
-    public void SetPointer(ValueRef pointer)
-    {
-        Pointer = pointer;
     }
 
     public ValueRef Allocate(BuilderRef builder)
@@ -76,9 +92,24 @@ public class Variable
         LLVM.BuildStore(builder, value, Pointer);
     }
 
+    public ValueRef GetDataPointer(BuilderRef builder)
+    {
+        ValueRef pointer = Pointer;
+
+        if (Symbol.DataType.IsReferenced)
+            pointer = LLVM.BuildLoad(builder, pointer, "malloc_ptr");
+
+        return pointer;
+    }
+
     public ValueRef Load(BuilderRef builder)
     {
-        return LLVM.BuildLoad(builder, Pointer, $"{Symbol.Name}_load");
+        ValueRef value = LLVM.BuildLoad(builder, Pointer, $"{Symbol.Name}_load");
+
+        if (Symbol.DataType.IsReferenced)
+            value = LLVM.BuildLoad(builder, value, "malloc_ptr");
+
+        return value;
     }
 }
 
@@ -93,8 +124,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     private Function? _crntFn;
     private readonly Stack<ValueRef> _valueStack;
-    private readonly Dictionary<string, Param> _params;
-    private readonly Dictionary<string, Variable> _variables;
+    private readonly Dictionary<string, INamedValue> _variables;
     private readonly Dictionary<string, Function> _functions;
 
     public IRGenerator(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
@@ -102,8 +132,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         _typeResolver = new LLVMTypeResolver();
         _valueStack = new Stack<ValueRef>();
 
-        _params = new Dictionary<string, Param>();
-        _variables = new Dictionary<string, Variable>();
+        _variables = new Dictionary<string, INamedValue>();
         _functions = new Dictionary<string, Function>();
     }
 
@@ -119,6 +148,8 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         var message = new MyString();
         LLVM.VerifyModule(_module, VerifierFailureAction.AbortProcessAction, message);
+        
+        LLVM.DisposeBuilder(_builder);
     }
 
     public void Visit(CompilationUnit unit)
@@ -191,11 +222,6 @@ public class IRGenerator : CompilerPass, IASTVisitor
     public void Visit(AssignmentStatement stmt)
     {
         ValueRef lValue = EvaluateExpr(stmt.LExpr, loadLocator: false);
-        if (stmt.Symbol.Name == "z")
-        {
-            System.Console.WriteLine();
-        }
-
         ValueRef value = EvaluateExpr(stmt.Initializer);
 
         LLVM.BuildStore(_builder, value, lValue);
@@ -203,12 +229,26 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(IncrementStatement stmt)
     {
-        Variable variable = _variables[stmt.Symbol.Name];
+        INamedValue variable = _variables[stmt.Symbol.Name];
 
-        if (stmt.Decrement)
-            LLVMHelper.BuildDecrement(_builder, variable.Pointer);
+        if (!stmt.Symbol.DataType.IsPointer)
+        {
+            ValueRef result;
+            
+            ValueRef varValue = variable.Load(_builder);
+            if (stmt.Decrement) result = LLVM.BuildSub(_builder, varValue, LLVMHelper.OneInt, "inc_result");
+            else result = LLVM.BuildAdd(_builder, varValue, LLVMHelper.OneInt, "inc_result");
+
+            LLVM.BuildStore(_builder, result, variable.Pointer);
+        }
         else
-            LLVMHelper.BuildIncrement(_builder, variable.Pointer);
+        {
+            ValueRef ptr = variable.GetDataPointer(_builder);
+            if (!stmt.Decrement) ptr = LLVM.BuildGEP(_builder, ptr, [ LLVMHelper.OneInt ], "inc_result"); 
+            else ptr = LLVM.BuildGEP(_builder, ptr, [ LLVMHelper.MinusOneInt ], "inc_result");
+
+            LLVM.BuildStore(_builder, ptr, variable.Pointer);
+        }
     }
 
     public void Visit(FunCallStatement stmt)
@@ -249,18 +289,26 @@ public class IRGenerator : CompilerPass, IASTVisitor
                 LLVM.BuildStore(_builder, paramValue, paramPtr);
 
                 var param = new Param(paramSymbol.Name, paramType, paramPtr);
-                _params[param.Name] = param;
+                _variables[param.Name] = param;
             }
 
-            ValueRef returnPtr = LLVM.BuildAlloca(_builder, retType, FUNCTION_RET_VAR_NAME);
-            function.ReturnPointer = returnPtr;
+            if (functionSymbol.ReturnType != MarshalType.Void)
+            {
+                ValueRef returnPtr = LLVM.BuildAlloca(_builder, retType, FUNCTION_RET_VAR_NAME);
+                function.ReturnPointer = returnPtr;
+            }
 
             BasicBlockRef returnBB = LLVM.AppendBasicBlock(fn, "return");
             function.ReturnBlock = returnBB;
 
             LLVM.PositionBuilderAtEnd(_builder, returnBB);
-            var retValue = LLVM.BuildLoad(_builder, returnPtr, "ret_value");
-            LLVM.BuildRet(_builder, retValue);
+
+            if (functionSymbol.ReturnType != MarshalType.Void)
+            {
+                var retValue = LLVM.BuildLoad(_builder, function.ReturnPointer, "ret_value");
+                LLVM.BuildRet(_builder, retValue);
+            }
+            else LLVM.BuildRetVoid(_builder);
 
             LLVM.PositionBuilderAtEnd(_builder, entryBB); 
 
@@ -280,8 +328,12 @@ public class IRGenerator : CompilerPass, IASTVisitor
             return;
         }
 
-        ValueRef value = EvaluateExpr(stmt.ReturnExpr);
-        LLVM.BuildStore(_builder, value, _crntFn.ReturnPointer);
+        if (_crntFn.Symbol.ReturnType != MarshalType.Void)
+        {
+            ValueRef value = EvaluateExpr(stmt.ReturnExpr!);
+            LLVM.BuildStore(_builder, value, _crntFn.ReturnPointer);
+        }
+
         LLVM.BuildBr(_builder, _crntFn.ReturnBlock);
     }
 
@@ -409,17 +461,43 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(UnaryOpExpression expr)
     {
+        // Key differences to allow complex address of, deference operators :
+        // To allow *(&x):
+        // &x is an unary operation and is evaluated to a transient (rvalue).
+        // since it's a transient value we don't need to load anything
+        //
+        // To allow *p where p is a pointer:
+        // p is a var ref expression and is evaluated to a locator (lvalue).
+        // since it's a locator value we need to load the locator first.
+
+        // Determine if the expression should return an lvalue (pointer) or load its value.
+        // If the operation is AddressOf or we are evaluating for an lvalue, do not load.
         bool loadLocator = expr.Operation != UnaryOpType.AddressOf && expr.Operation != UnaryOpType.Deference;
         ValueRef operand = EvaluateExpr(expr.Operand, loadLocator);
 
-        ValueRef result = expr.Operation switch
+        ValueRef result;
+        switch (expr.Operation)
         {
-            UnaryOpType.Negation => LLVM.BuildNeg(_builder, operand, "negTmp"),
-            UnaryOpType.Not => LLVM.BuildNot(_builder, operand, "notTmp"),
-            UnaryOpType.AddressOf => operand,
-            UnaryOpType.Deference => LLVM.BuildLoad(_builder, operand, "defTmp"),
-            _ => throw new InvalidOperationException($"Unsupported unary operation: {expr.Operation}")
-        };
+            case UnaryOpType.Negation:
+                result = LLVM.BuildNeg(_builder, operand, "negTmp");
+                break;
+
+            case UnaryOpType.Not:
+                result = LLVM.BuildNot(_builder, operand, "notTmp");
+                break;
+
+            case UnaryOpType.AddressOf:
+                result = operand;
+                break;
+
+            case UnaryOpType.Deference:
+                if (expr.Operand.ValueCategory == ValueCategory.Locator) result = LLVM.BuildLoad(_builder, operand, "defTmp");
+                else  result = operand;
+                break;
+
+            default:
+                throw new InvalidOperationException($"Unsupported unary operation: {expr.Operation}");
+        }
 
         _valueStack.Push(result);
     }
@@ -505,17 +583,10 @@ public class IRGenerator : CompilerPass, IASTVisitor
     {
         VariableSymbol var = expr.Symbol;
 
-        if (_variables.TryGetValue(var.Name, out Variable? variable))
+        if (_variables.TryGetValue(var.Name, out INamedValue? variable))
         {
-            ValueRef pointer = variable.Pointer;
-            if (var.DataType.IsReferenced)
-                pointer = LLVM.BuildLoad(_builder, pointer, $"ref_ptr");
-
+            ValueRef pointer = variable.GetDataPointer(_builder);
             _valueStack.Push(pointer);
-        }
-        else if (_params.TryGetValue(var.Name, out Param? param))
-        {
-            _valueStack.Push(param.Pointer);
         }
         else 
         {
@@ -568,7 +639,9 @@ public class IRGenerator : CompilerPass, IASTVisitor
         ValueRef[] argsValue = args.Select((x) => {
             return EvaluateExpr(x); 
         }).ToArray();
-        return LLVM.BuildCall(_builder, fn.Pointer, argsValue, $"{function.Name}_result");
+
+        string returnName = function.ReturnType == MarshalType.Void ? string.Empty : $"{function.Name}_result"; 
+        return LLVM.BuildCall(_builder, fn.Pointer, argsValue, returnName);
     }
 
     private ValueRef EvaluateExpr(SyntaxExpression expr, bool loadLocator = true)

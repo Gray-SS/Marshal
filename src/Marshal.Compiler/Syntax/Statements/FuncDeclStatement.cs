@@ -28,7 +28,7 @@ public class FuncDeclStatement : SyntaxStatement
 
     public override void Dump(int level = 0)
     {
-        Dump($"[{nameof(FuncDeclStatement)}:{NameToken.Value}:({string.Join(',', Params.Select(x => x.NameToken.Value))})]: {SyntaxReturnType.DisplayName}", level);
+        Dump($"[{nameof(FuncDeclStatement)}:{NameToken.Value}:({string.Join(',', Params.Select(x => x.NameToken.Value))})]: {SyntaxReturnType.Name}", level);
         Body?.Dump(level + 1);
     }
 

@@ -61,21 +61,30 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     public void Visit(FuncDeclStatement stmt)
     {
         FunctionSymbol function = stmt.Symbol;
-
-        if (function.ReturnType != MarshalType.Void && stmt.Body != null)
+        
+        if (stmt.Body != null)
         {
+            stmt.Body.Accept(this);
             var returnStatements = stmt.Body.Statements.OfType<ReturnStatement>();
             foreach (ReturnStatement statement in returnStatements)
             {
                 if (statement != returnStatements.First())
                     ReportDetailed(ErrorType.Warning, $"la déclaration de retour n'est jamais atteinte.", statement.Loc);
 
-                if (!IsTypeCompatible(statement.ReturnExpr.Type, function.ReturnType))
-                    ReportDetailed(ErrorType.Error, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnExpr.Loc);
+                if (function.ReturnType != MarshalType.Void)
+                {
+                    if (statement.ReturnExpr == null)
+                        ReportDetailed(ErrorType.SemanticError, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais aucune valeur n'a été retournée.", statement.Loc);
+                    else if (!IsTypeCompatible(statement.ReturnExpr.Type, function.ReturnType))
+                        ReportDetailed(ErrorType.SemanticError, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnExpr.Loc);
+                }
+                else
+                {
+                    if (statement.ReturnExpr != null)
+                        ReportDetailed(ErrorType.SemanticError, $"la déclaration de retour n'attend aucune valeur mais une expression de type '{statement.ReturnExpr.Type.Name}' a été retournée.", statement.ReturnExpr.Loc);
+                }
             }
         }
-        
-        stmt.Body?.Accept(this);
     }
 
     public void Visit(VarDeclStatement stmt)
@@ -102,18 +111,26 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             ReportDetailed(ErrorType.SemanticError, $"l'expression à gauche doit être une expression de type locator (pointeur, déférencement de pointeur, accès à un tableau, ect...)", stmt.LExpr.Loc);
         }
 
-        if (!IsTypeCompatible(stmt.Initializer.Type, stmt.Symbol.DataType))
+        if (!IsTypeCompatible(stmt.Initializer.Type, stmt.LExpr.Type))
         {
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.Initializer.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.LExpr.Type.Name}'.", stmt.Initializer.Loc);
         }
     }
 
     public void Visit(IncrementStatement stmt)
     {
-        if (!stmt.Symbol.DataType.IsNumeric) 
+        if (!CanIncrement(stmt.Symbol.DataType))
         {
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'incrémenter une variable non numérique '{stmt.Symbol.Name}'", stmt.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'incrémenter une variable de type '{stmt.Symbol.DataType.Name}'.", stmt.Loc);
         }
+    }
+
+    private static bool CanIncrement(MarshalType type)
+    {
+        if (type.IsNumeric) return true;
+        if (type.IsPointer) return true;
+
+        return false;
     }
 
     public void Visit(FunCallStatement stmt)
@@ -133,7 +150,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             ReportDetailed(ErrorType.Warning, $"casting non nécessaire entre '{expr.Type.Name}' et '{expr.CastedExpr.Type.Name}'.", expr.Loc);
 
         if (!CanExplicitlyCast(expr.CastedExpr.Type, expr.Type))
-            ReportDetailed(ErrorType.Error, $"impossible de cast une expression de type '{expr.CastedExpr.Type.Name}' en '{expr.Type.Name}'", expr.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"impossible de cast une expression de type '{expr.CastedExpr.Type.Name}' en '{expr.Type.Name}'", expr.Loc);
     }
 
     public void Visit(FunCallExpression expr)
@@ -141,6 +158,9 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         FunctionSymbol function = expr.Symbol;
 
         AnalyzeFunctionCall(function, expr.Args, expr.NameToken.Loc);
+
+        if (function.ReturnType == MarshalType.Void)
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur à la fonction '{function.Name}' car elle retourne void.", expr.Loc);
     }
 
 

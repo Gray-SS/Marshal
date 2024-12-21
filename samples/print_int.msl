@@ -1,9 +1,8 @@
 func extern putchar(c: char): int;
 
-func print_int(value: int): int {
+proc print_int(value: int) {
     if (value == 0) {
         putchar('0');
-        return 0;
     }
 
     if (value < 0) {
