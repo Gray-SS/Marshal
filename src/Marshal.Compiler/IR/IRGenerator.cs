@@ -31,7 +31,7 @@ public interface INamedValue
 {
     string Name { get; }
     TypeRef Type { get; }
-    ValueRef Pointer { get; }
+    ValueRef Pointer { get; set; }
 
     ValueRef Load(BuilderRef builder);
     ValueRef GetDataPointer(BuilderRef builder);
@@ -41,7 +41,7 @@ public class Param : INamedValue
 {
     public string Name { get; }
     public TypeRef Type { get; }
-    public ValueRef Pointer { get; }
+    public ValueRef Pointer { get; set; }
 
     public Param(string name, TypeRef type, ValueRef pointer)
     {
@@ -243,9 +243,21 @@ public class IRGenerator : CompilerPass, IASTVisitor
         }
         else
         {
-            ValueRef ptr = variable.GetDataPointer(_builder);
+            // Allowing incrementation of pointers for the following example:
+            // var a: int[] = new int[2];
+            // a[0] = 5;
+            // a[1] = 10;
+
+            // var p: int* = &a[0];
+            // p++;
+            //
+            // we need to load the address that the pointer is pointing to
+            // next, we're getting the next element of the pointed type.
+            // finally we're storing the new pointed memory to the pointer variable
+
+            ValueRef ptr = variable.Load(_builder);
             if (!stmt.Decrement) ptr = LLVM.BuildGEP(_builder, ptr, [ LLVMHelper.OneInt ], "inc_result"); 
-            else ptr = LLVM.BuildGEP(_builder, ptr, [ LLVMHelper.MinusOneInt ], "inc_result");
+            else ptr = LLVM.BuildGEP(_builder, ptr, [ LLVMHelper.MinusOneInt ], "dec_result");
 
             LLVM.BuildStore(_builder, ptr, variable.Pointer);
         }
@@ -461,15 +473,15 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(UnaryOpExpression expr)
     {
-        // Key differences to allow complex address of, deference operators :
-        // To allow *(&x):
+        // Key differences to allow complex address of '&' and deference '*' operators :
+        // - To allow *(&x):
         // &x is an unary operation and is evaluated to a transient (rvalue).
-        // since it's a transient value we don't need to load anything
+        // since it's a transient value we don't need to load the pointer
         //
-        // To allow *p where p is a pointer:
+        // - To allow *p where p is a pointer:
         // p is a var ref expression and is evaluated to a locator (lvalue).
         // since it's a locator value we need to load the locator first.
-
+        
         // Determine if the expression should return an lvalue (pointer) or load its value.
         // If the operation is AddressOf or we are evaluating for an lvalue, do not load.
         bool loadLocator = expr.Operation != UnaryOpType.AddressOf && expr.Operation != UnaryOpType.Deference;
@@ -492,7 +504,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
             case UnaryOpType.Deference:
                 if (expr.Operand.ValueCategory == ValueCategory.Locator) result = LLVM.BuildLoad(_builder, operand, "defTmp");
-                else  result = operand;
+                else result = operand;
                 break;
 
             default:
@@ -510,35 +522,59 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(BinaryOpExpression expr)
     {
-        ValueRef left = EvaluateExpr(expr.Left);
-        ValueRef right = EvaluateExpr(expr.Right);
-
-        if (expr.Operation.IsNumericOperation())
+        //We know that either the left or the right expression is a pointer (check done in Semantic Analyzer pass).
+        ValueRef result;
+        if (expr.Left.Type.IsPointer || expr.Right.Type.IsPointer)
         {
-            TypeRef type = _typeResolver.Resolve(expr.Type);
-            if (LLVM.TypeOf(left) != type)
-                left = LLVM.BuildSExt(_builder, left, type, "lValue_cast");
+            //Pointer arithmetics
+            (ValueRef ptr, ValueRef numeric) = expr.Left.Type.IsPointer ? 
+                                              (EvaluateExpr(expr.Left), EvaluateExpr(expr.Right)) :
+                                              (EvaluateExpr(expr.Right), EvaluateExpr(expr.Left));
 
-            if (LLVM.TypeOf(right) != type)
-                right = LLVM.BuildSExt(_builder, right, type, "rValue_cast");
+            if (expr.Operation == BinOpType.Addition)
+            {
+                result = LLVM.BuildGEP(_builder, ptr, [ numeric ], "ptra_result");
+            }
+            else if (expr.Operation == BinOpType.Subtraction)
+            {
+                result = LLVM.BuildGEP(_builder, ptr, [ LLVM.BuildNeg(_builder, numeric, "neg_numeric") ], "ptr_sub_result");
+            }
+            else
+                throw new InvalidOperationException($"Operation '{expr.Operation}' is not supported for pointer arithmetics.");
         }
-
-        ValueRef result = expr.Operation switch
+        else
         {
-            BinOpType.Addition => LLVM.BuildAdd(_builder, left, right, "add_result"),
-            BinOpType.Subtraction => LLVM.BuildSub(_builder, left, right, "sub_result"),
-            BinOpType.Multiplication => LLVM.BuildMul(_builder, left, right, "mul_result"),
-            BinOpType.Division => LLVM.BuildSDiv(_builder, left, right, "div_result"),
-            BinOpType.Modulo => LLVM.BuildSRem(_builder, left, right, "mod_result"),
-            BinOpType.Equals => LLVM.BuildICmp(_builder, IntPredicate.IntEQ, left, right, "eq_result"),
-            BinOpType.NotEquals => LLVM.BuildICmp(_builder, IntPredicate.IntNE, left, right, "ne_result"),
-            BinOpType.BiggerThan => LLVM.BuildICmp(_builder, IntPredicate.IntSGT, left, right, "gt_result"),
-            BinOpType.BiggerThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSGE, left, right, "ge_result"),
-            BinOpType.LessThan => LLVM.BuildICmp(_builder, IntPredicate.IntSLT, left, right, "lt_result"),
-            BinOpType.LessThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSLE, left, right, "le_result"),
+            //Basic arithmetics
+            ValueRef left = EvaluateExpr(expr.Left);
+            ValueRef right = EvaluateExpr(expr.Right);
 
-            _ => throw new NotImplementedException($"Unsupported binary operation: {expr.Operation}"),
-        };
+            if (expr.Operation.IsNumericOperation())
+            {
+                TypeRef type = _typeResolver.Resolve(expr.Type);
+                if (LLVM.TypeOf(left) != type)
+                    left = LLVM.BuildSExt(_builder, left, type, "lValue_cast");
+
+                if (LLVM.TypeOf(right) != type)
+                    right = LLVM.BuildSExt(_builder, right, type, "rValue_cast");
+            }
+
+            result = expr.Operation switch
+            {
+                BinOpType.Addition => LLVM.BuildAdd(_builder, left, right, "add_result"),
+                BinOpType.Subtraction => LLVM.BuildSub(_builder, left, right, "sub_result"),
+                BinOpType.Multiplication => LLVM.BuildMul(_builder, left, right, "mul_result"),
+                BinOpType.Division => LLVM.BuildSDiv(_builder, left, right, "div_result"),
+                BinOpType.Modulo => LLVM.BuildSRem(_builder, left, right, "mod_result"),
+                BinOpType.Equals => LLVM.BuildICmp(_builder, IntPredicate.IntEQ, left, right, "eq_result"),
+                BinOpType.NotEquals => LLVM.BuildICmp(_builder, IntPredicate.IntNE, left, right, "ne_result"),
+                BinOpType.BiggerThan => LLVM.BuildICmp(_builder, IntPredicate.IntSGT, left, right, "gt_result"),
+                BinOpType.BiggerThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSGE, left, right, "ge_result"),
+                BinOpType.LessThan => LLVM.BuildICmp(_builder, IntPredicate.IntSLT, left, right, "lt_result"),
+                BinOpType.LessThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSLE, left, right, "le_result"),
+
+                _ => throw new NotImplementedException($"Unsupported binary operation: {expr.Operation}"),
+            };
+        }
 
         _valueStack.Push(result);
     }

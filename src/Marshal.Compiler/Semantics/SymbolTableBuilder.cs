@@ -221,6 +221,9 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         }
         else if (expr.Operation == UnaryOpType.AddressOf)
         {
+            if (expr.Operand.ValueCategory == ValueCategory.Transient)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"impossible de récupérer l'addresse d'une valeur transient.", expr.Operand.Loc);
+
             expr.Type = MarshalType.CreatePointer(expr.Operand.Type);
         }
         else if (expr.Operation == UnaryOpType.Deference)
@@ -255,15 +258,15 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
         if (expr.Operation.IsNumericOperation())
         {
-            if (!expr.Left.Type.IsNumeric || !expr.Right.Type.IsNumeric)
-                throw new CompilerException(ErrorType.SemanticError, $"opération invalide '{expr.Operation}' entre type non numérique '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
+            if (!IsNumericOperationPossible(expr.Left.Type, expr.Right.Type, expr.Operation))
+                throw new CompilerException(ErrorType.SemanticError, $"opération numérique invalide '{expr.Operation}' entre valeurs de type '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
 
             expr.Type = GetWiderType(expr.Left.Type, expr.Right.Type);
         }
         else if (expr.Operation.IsComparisonOperation())
         {
             if (!AreComparableTypes(expr.Left.Type, expr.Right.Type))
-                throw new CompilerException(ErrorType.SemanticError, $"comparaison immpossible entre une valeur de type '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
+                throw new CompilerException(ErrorType.SemanticError, $"comparaison immpossible entre valeurs de type '{expr.Left.Type.Name}' et '{expr.Right.Type.Name}'.");
 
             expr.Type = MarshalType.Boolean;
         }
@@ -406,6 +409,20 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
     private static bool AreComparableTypes(MarshalType leftType, MarshalType rightType)
     {
         return (leftType.IsNumeric && rightType.IsNumeric) || (leftType == MarshalType.Boolean && rightType == MarshalType.Boolean);
+    }
+
+    private static bool IsNumericOperationPossible(MarshalType leftType, MarshalType rightType, BinOpType operation)
+    {
+        if (leftType.IsNumeric && rightType.IsNumeric)
+            return true;
+
+        if (leftType.IsPointer && rightType.IsNumeric && (operation == BinOpType.Addition || operation == BinOpType.Subtraction))
+            return true;
+
+        if (leftType.IsNumeric && rightType.IsPointer && (operation == BinOpType.Addition))
+            return true;
+
+        return false;
     }
 
     private MarshalType ResolveType(string name)

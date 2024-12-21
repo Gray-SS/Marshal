@@ -2,7 +2,7 @@
 
 int main() {
     char str[16] = "Hello World !";
-    putchar(&str[0]);
+    char **p = &(&str[3]);
 
     return 0;
 }

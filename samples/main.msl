@@ -19,10 +19,13 @@ proc print_int(value: int) {
 }
 
 func main(): int {
-    var str: string = "Hello World !";
-    var p: char* = &str[2];
+    var a: int[] = new int[3];
+    a[0] = 5;
+    a[1] = 10;
+    a[2] = 15;
 
-    putchar(*p);
-
+    var p: int* = &a[1];
+    print_int(*((p - 1) + 2));
+    
     return 0;
 }
