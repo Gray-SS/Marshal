@@ -86,9 +86,9 @@ Define reusable functions:
 ```go
 //There is no string concatenation at the moment. Yeah, I really need to implement that
 func greet(name: string): void {
-    print("Hello, ");
-    print(name);
-    print("!");
+    puts("Hello, ");
+    puts(name);
+    puts("!");
 }
 ```
 
@@ -99,17 +99,17 @@ Control your program's logic with conditions:
 ```go
 //Control the flow of the program with conditions
 if (x > 10) {
-    println("Greater than 10!");
+    puts("Greater than 10!");
 } else if (x < 10) {
-    println("10 or less.");
+    puts("10 or less.");
 } else {
-    println("10");
+    puts("10");
 }
 
 //while loop running until 'i' is greater than 10
 var i: int = 0;
 while (i < 10) {
-    println(i);
+    puts(i);
     i++;
 }
 ```
