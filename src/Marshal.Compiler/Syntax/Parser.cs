@@ -17,7 +17,7 @@ public class Parser : CompilerPass
     public override void Apply()
     {
         Context.AST = ParseAST();
-        Context.AST.Dump();
+        // Context.AST.Dump();
     }
 
     public CompilationUnit ParseAST()
@@ -50,6 +50,8 @@ public class Parser : CompilerPass
             return ParseFuncDeclStatement();
         else if (CurrentToken.Type == TokenType.ProcKeyword)
             return ParseProcDeclStatement();
+        else if (CurrentToken.Type == TokenType.StructKeyword)
+            return ParseStructDeclStatement();
         else if (CurrentToken.Type == TokenType.IfKeyword)
             return ParseIfStatement();
         else if (CurrentToken.Type == TokenType.WhileKeyword)
@@ -75,6 +77,42 @@ public class Parser : CompilerPass
             return ParseScopeStatement();
 
         throw new CompilerDetailedException(ErrorType.SyntaxError, $"token inattendu '{CurrentToken.Value}'.", CurrentToken.Loc);
+    }
+
+    private StructDeclStatement ParseStructDeclStatement()
+    {
+        Location loc = CurrentToken.Loc;
+
+        Expect(TokenType.StructKeyword, "le mot-clé 'struct' est attendu pour une déclaration de structure.");
+        Token identifierToken = Expect(TokenType.Identifier, $"le nom du type est attendu après le mot clé 'struct'.");
+        Expect(TokenType.OpenCurlyBracket, "accolade ouvrante '{' attendue après le nom de la structure.");
+
+        var fields = new List<FieldDeclStatement>();
+        while (CurrentToken.Type != TokenType.CloseCurlyBracket)
+        {
+            if (CurrentToken.Type == TokenType.Identifier)
+            {
+                FieldDeclStatement field = ParseFieldDeclStatement();
+                fields.Add(field);
+            }
+        }
+
+        Expect(TokenType.CloseCurlyBracket, "accolade fermante '}' attendue après la déclaration du corps de la structure.");
+
+        return new StructDeclStatement(loc, identifierToken, fields);
+    }
+
+    private FieldDeclStatement ParseFieldDeclStatement() 
+    {
+        Location loc = CurrentToken.Loc;
+
+        Token identifier = Expect(TokenType.Identifier, "l'identifiant du champs est requis.");
+        Expect(TokenType.Colon, "deux-points ':' attendu après l'identifiant du champs.");
+
+        SyntaxTypeNode type = ParseType("le type du champs est attendu après les deux-points.");
+        Expect(TokenType.SemiColon, "point-virgule ';' attendu après la déclaration d'un champs.");
+        
+        return new FieldDeclStatement(loc, identifier.Value, type);
     }
 
     private WhileStatement ParseWhileStatement()
@@ -407,8 +445,23 @@ public class Parser : CompilerPass
 
         if (CurrentToken.Type == TokenType.OpenBracket)
         {
-            ReportDetailed(ErrorType.Error, "l'allouement d'une classe ou d'une structure n'est pas supporté.", CurrentToken.Loc);
-            throw new Exception();
+            NextToken();
+            
+            var arguments = new List<SyntaxExpression>();
+            while (CurrentToken.Type != TokenType.CloseBracket)
+            {
+                var argument = ParseExpression();
+                arguments.Add(argument);
+
+                if (CurrentToken.Type == TokenType.Comma)
+                    NextToken();
+                else
+                    break;
+            }
+
+            Expect(TokenType.CloseBracket, "une parenthèse fermante ')' est attendue après la liste des arguments du constructeur.");
+
+            return new NewStructExpression(loc, typeName, arguments);
         }
 
         ReportDetailed(ErrorType.Error, $"le token '{CurrentToken.Value}' n'était pas attendu.", CurrentToken.Loc);
@@ -533,6 +586,8 @@ public class Parser : CompilerPass
         {
             if (Peek(1).Type == TokenType.OpenBracket)
                 return ParseFunCallExpression();
+            if (Peek(1).Type == TokenType.Dot)
+                return ParseMemberAccessExpression();
 
             return ParseVarRefExpression();
         }
@@ -550,6 +605,16 @@ public class Parser : CompilerPass
         }
 
         return ParseLiteralExpression();
+    }
+
+    private MemberAccessExpression ParseMemberAccessExpression()
+    {
+        Location loc = CurrentToken.Loc;
+        SyntaxExpression varExpr = ParseVarRefExpression();
+        Expect(TokenType.Dot, "un point '.' est attendu après l'identifiant de la structure.");
+        Token memberIdentifier = Expect(TokenType.Identifier, "un identifiant de membre est attendu après le point '.'.");
+
+        return new MemberAccessExpression(loc, varExpr, memberIdentifier.Value);
     }
 
     private bool IsExpressionStart(Token token)

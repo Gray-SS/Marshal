@@ -4,23 +4,6 @@ Welcome to the official documentation for **Marshal**! 🎉 Marshal is a compile
 
 ---
 
-## 📖 **Table of Contents**
-1. [Getting Started](#getting-started)
-2. [Installation](#installation)
-3. [Hello World](#hello-world)
-4. [Key Features](#key-features)
-5. [Language Syntax](#language-syntax)
-    - Variables
-    - Functions
-    - Control Flow
-6. [Standard Library](#standard-library)
-7. [Compiling Your Code](#compiling-your-code)
-8. [Sample Programs](#sample-programs)
-9. [Contributing](#contributing)
-10. [FAQs](#faqs)
-
----
-
 ## 🛠️ **Getting Started**
 
 Marshal is easy to set up and use. Whether you're an experienced developer or a student eager to learn compiler design, this documentation will help you get started!
@@ -47,27 +30,21 @@ cd Marshal/src/Marshal.Compiler
 dotnet build
 ```
 
-### Step 3: Add Marshal to your PATH
-(Optional) Add the `marshal` executable to your PATH for easier usage:
-```
-export PATH=$PATH:/path/to/Marshal/src/Marshal.Compiler/bin/Debug/net8.0
-```
-
----
-
 ## 🌟 Hello World
 
 Here’s your first program in Marshal. 🎉  
-Create a file named `hello.ms` and add the following code:
+Create a file named `hello.msl` and add the following code:
 
 ```go
-import std::io;
+func extern puts(str: string): int;
 
 func main(): int {
-    println("Hello, World!");
+    puts("Hello World!");
     return 0;
 }
 ```
+
+As you can probably see, Marshal doesn't have any standard library done yet, so we're using the good old puts function from the c standard library
 
 To compile and run the program:
 
@@ -79,17 +56,15 @@ marshalc -i hello.ms -o hello
 Expected output:
 
 ```bash
-Hello, World!
+Hello World!
 ```
 
 ---
 
 ## 🔑 Key Features
 
-- **Educational Roots:** Designed to help you learn compiler theory and practice. 📚
-- **LLVM-Optimized**: Marshal leverages LLVM for machine code generation. (not optimisation layer at the moment) 🚀  
-- **Modern Syntax:** Easy to write and read, even for beginners. ✨  
-- **Cross-Platform:** Marshal runs on Windows, macOS, and Linux. 🌐  
+- **LLVM-Optimized**: Marshal leverages LLVM for machine code generation. (no optimisation layer at the moment) 🚀  
+- **Cross-Platform:** Marshal runs on Windows, macOS, and Linux. (probably) 🌐  
 - **Extensible:** A great base for adding new features and testing language ideas. 🔧
 
 ---
@@ -109,7 +84,7 @@ var name: string = "Alice";
 Define reusable functions:
 
 ```go
-//There is no string concatenation at the moment.
+//There is no string concatenation at the moment. Yeah, I really need to implement that
 func greet(name: string): void {
     print("Hello, ");
     print(name);
@@ -131,11 +106,6 @@ if (x > 10) {
     println("10");
 }
 
-//for loop going from 0 to 10
-for (var i: int = 0; i < 10; i++) {
-    println(i);
-}
-
 //while loop running until 'i' is greater than 10
 var i: int = 0;
 while (i < 10) {
@@ -144,6 +114,15 @@ while (i < 10) {
 }
 ```
 
+### Structs
+Structures are value types and are allocated on the stack. I took inspiration from c# where I found this variation very interesting. Their value are copied when passing to a function.
+
+```go
+struct Vector2 {
+    x: int;
+    y: int;
+}
+```
 
 ### 🌌 Comments
 
@@ -152,6 +131,11 @@ Add single-line comments with //:
 ```go
 // This is a comment
 var x: int = 42; // Another comment
+
+/*
+    This is also a comment
+*/
+
 ```
 
 ---
@@ -171,7 +155,7 @@ Marshal is an open-source project, and we welcome contributions! 🎉 Here's how
 **A:** Marshal supports Windows, macOS, and Linux. You can generate binaries for all these platforms.
 
 **Q: Is Marshal production-ready?**  
-**A:** Not yet. Marshal is primarily an educational project, but we encourage experimentation and feedback to push it further.
+**A:** Completely not, as you may have seen it's lacking major features like string concatenation, multiple files compilation, some issues with string because of my shit logic
 
 **Q: Can I extend Marshal with custom features?**  
 **A:** Absolutely! Marshal is designed to be extensible. Feel free to add new syntax or functionality and share your improvements.

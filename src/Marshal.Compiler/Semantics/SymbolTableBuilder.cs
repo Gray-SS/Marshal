@@ -17,21 +17,20 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         Visit(Context.AST);
     }
 
-    public void Visit(CompilationUnit unit)
+    public void Visit(CompilationUnit unit) => DoVerifiedBlock(() =>
     {
-        DoVerifiedBlock(() => {
-            foreach (SyntaxStatement statement in unit.Statements)
-            {
-                statement.Accept(this);
-            }
-        });
-    }
+        foreach (SyntaxStatement statement in unit.Statements)
+        {
+            statement.Accept(this);
+        }
+    });
 
     public void Visit(ScopeStatement stmt)
     {
         Context.SymbolTable.EnterScope();
 
-        DoVerifiedBlock(() => {
+        DoVerifiedBlock(() => 
+        {
             foreach (SyntaxStatement statement in stmt.Statements)
             {
                 statement.Accept(this);
@@ -58,6 +57,49 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         stmt.Scope.Accept(this);
     }
 
+    public void Visit(StructDeclStatement stmt)
+    {
+        string typeName = stmt.Identifier.Value;
+
+        if (Context.SymbolTable.TryGetType(typeName, out MarshalType? type))
+        {
+            if (type is StructType)
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"Un type avec le même nom a déjà été déclaré.", stmt.Loc);
+            else
+                throw new CompilerDetailedException(ErrorType.SemanticError, $"Impossible de nommer le type '{typeName}' car un type système porte déjà ce nom.", stmt.Loc);
+        }
+
+        Context.SymbolTable.EnterScope();
+
+        var fields = stmt.Fields.Select(x => {
+            x.Accept(this);
+            return x.Symbol!;
+        }).ToArray();
+
+        Context.SymbolTable.ExitScope();
+
+        int sizeInBytes = fields.Sum(x => {
+            return x.DataType.SizeInBytes;
+        });
+
+        var symbol = new StructType(typeName, sizeInBytes, fields);
+        Context.SymbolTable.AddSymbol(symbol);
+
+        stmt.Symbol = symbol;
+    }
+
+    public void Visit(FieldDeclStatement stmt)
+    {
+        FieldSymbol? field = Context.SymbolTable.GetSymbol(stmt.FieldName, SymbolType.Field) as FieldSymbol;
+        if (field != null) 
+            throw new CompilerDetailedException(ErrorType.SemanticError, $"le champ '{stmt.FieldName}' est déjà déclaré dans la structure.", stmt.Loc);
+
+        field = new FieldSymbol(stmt.FieldName, ResolveType(stmt.SyntaxType));
+        Context.SymbolTable.AddSymbol(field);
+
+        stmt.Symbol = field;
+    }
+
     public void Visit(FuncDeclStatement stmt)
     {
         string functionName = stmt.NameToken.Value;
@@ -66,7 +108,6 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         {
             if (existingSymbol.IsDefined)
                 throw new CompilerDetailedException(ErrorType.SemanticError, $"une fonction nommée '{functionName}' est déjà définie dans ce contexte.", stmt.NameToken.Loc);
-
             if (!ValidateFunctionSignature(existingSymbol, stmt))
                 throw new CompilerDetailedException(ErrorType.SemanticError, $"la fonction '{functionName}' est redéclarée avec une signature différente.", stmt.NameToken.Loc);
 
@@ -166,11 +207,13 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     public void Visit(IncrementStatement stmt)
     {
-        string variableName = stmt.NameToken.Value;
-        if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
-            throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
+        // TODO: Move this logic to the Semantic Analysis phase.
 
-        stmt.Symbol = symbol;
+        // string variableName = stmt.NameToken.Value;
+        // if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
+        //     throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'existe pas dans le contexte actuel.", stmt.NameToken.Loc);
+
+        // stmt.Symbol = symbol;
     }
 
     public void Visit(FunCallStatement stmt)
@@ -280,7 +323,7 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         if (!Context.SymbolTable.TryGetVariable(variableName, out VariableSymbol? symbol))
             throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' n'est pas déclarée.", expr.NameToken.Loc);
 
-        if (!symbol.IsInitialized && !symbol.DataType.IsArray)
+        if (!symbol.IsInitialized && !symbol.DataType.IsArray && symbol.DataType is not StructType)
             throw new CompilerDetailedException(ErrorType.SemanticError, $"la variable '{variableName}' a été utilisée mais n'a jamais été initialisée.", expr.NameToken.Loc);
 
         expr.Symbol = symbol;
@@ -330,6 +373,20 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
         };
     }
 
+    public void Visit(MemberAccessExpression expr)
+    {
+        expr.VarExpr.Accept(this);
+
+        if (expr.VarExpr.Type is not StructType structType)
+            throw new CompilerDetailedException(ErrorType.SemanticError, $"vous essayez d'accéder à un membre d'un type qui n'est pas une structure. ({expr.VarExpr.Type.Name})", expr.Loc);
+        
+        if (!structType.TryGetField(expr.MemberName, out FieldSymbol? field))
+            throw new CompilerDetailedException(ErrorType.SemanticError, $"le champ '{expr.MemberName}' n'existe pas dans la structure '{structType.Name}'.", expr.Loc);
+        
+        expr.Type = field.DataType;
+        expr.MemberIdx = structType.GetFieldIndex(expr.MemberName);
+    }
+
     public void Visit(ArrayAccessExpression expr)
     {
         expr.ArrayExpr.Accept(this);
@@ -345,6 +402,8 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
             expr.Type = arrayType.ElementType;
         else if (expr.ArrayExpr.Type is PointerType pointerType)
             expr.Type = pointerType.Pointee;
+        else if (expr.ArrayExpr.Type is StringType)
+            expr.Type = MarshalType.Char;
         else
             throw new NotImplementedException();
     }
@@ -360,6 +419,13 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
                 throw new CompilerException(ErrorType.SemanticError, $"la taille du tableau doit obligatoirement être de type '{MarshalType.Int.Name}' mais un type '{arrayExpr.LengthExpr.Type.Name}' a été reçu.");
 
             arrayExpr.Type = MarshalType.CreateDynamicArray(type);
+        }
+        else if (expr is NewStructExpression typeExpr)
+        {
+            typeExpr.Arguments.ForEach(x => x.Accept(this));
+
+            var type = ResolveType(expr.TypeName.Value);
+            typeExpr.Type = type;
         }
     }
 
@@ -398,12 +464,8 @@ public class SymbolTableBuilder : CompilerPass, IASTVisitor
 
     private static MarshalType GetWiderType(MarshalType a, MarshalType b)
     {
-        if (a.SizeInBytes > b.SizeInBytes)
-            return a;
-        else if (a.SizeInBytes < b.SizeInBytes)
-            return b;
-        else
-            return a;
+        if (a.SizeInBytes >= b.SizeInBytes) return a;
+        else return b;
     }
 
     private static bool AreComparableTypes(MarshalType leftType, MarshalType rightType)

@@ -49,4 +49,7 @@ public enum TokenType : byte
     WhileKeyword,
     Percent,
     Ampersand,
+    StructKeyword,
+    FieldKeyword,
+    Dot,
 }

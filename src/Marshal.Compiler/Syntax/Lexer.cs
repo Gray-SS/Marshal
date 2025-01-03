@@ -52,6 +52,43 @@ public class Lexer : CompilerPass
                 Position++;
             }
 
+            if (CurrentChar == '/' && Peek(1) == '/')
+            {
+                while (CurrentChar != '\n' && CurrentChar != '\0')
+                    Advance(1);
+
+                continue;
+            }
+
+            if (CurrentChar == '/' && Peek(1) == '*')
+            {
+                Advance(2); // Skip '/*'
+                while (!(CurrentChar == '*' && Peek(1) == '/') && CurrentChar != '\0')
+                {
+                    if (CurrentChar == '\n')
+                    {
+                        _line++;
+                        _column = 1;
+                    }
+                    else
+                    {
+                        _column++;
+                    }
+                    Advance(1);
+                }
+
+                if (CurrentChar == '*' && Peek(1) == '/')
+                {
+                    Advance(2); // Skip '*/'
+                }
+                else
+                {
+                    ReportDetailed(ErrorType.SyntaxError, "Unterminated multi-line comment.", CurrentLoc);
+                }
+
+                continue; // Skip to the next token
+            }
+
             if (char.IsDigit(CurrentChar))
             {
                 int length = ReadWhile(char.IsDigit);
@@ -92,7 +129,9 @@ public class Lexer : CompilerPass
                 TokenType type = span switch
                 {
                     "proc" => TokenType.ProcKeyword,
+                    "field" => TokenType.FieldKeyword,
                     "func" => TokenType.FuncKeyword,
+                    "struct" => TokenType.StructKeyword,
                     "var" => TokenType.VarKeyword,
                     "new" => TokenType.NewKeyword,
                     "while" => TokenType.WhileKeyword,
@@ -112,6 +151,7 @@ public class Lexer : CompilerPass
 
             switch (CurrentChar)
             {
+                case '.': tokens.Add(ReadToken(TokenType.Dot, 1)); break;
                 case '+': tokens.Add(ReadToken(TokenType.Plus, 1)); break;
                 case '-': tokens.Add(ReadToken(TokenType.Minus, 1)); break;
                 case '*': tokens.Add(ReadToken(TokenType.Star, 1)); break;

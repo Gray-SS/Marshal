@@ -44,7 +44,7 @@ public class SymbolTable
     public SymbolTable()
     {
         _scopes = new Stack<Dictionary<SymbolKey, Symbol>>();
-        EnterScope();
+        EnterScope(); //Start the global scope.
     }
 
     public void EnterScope()

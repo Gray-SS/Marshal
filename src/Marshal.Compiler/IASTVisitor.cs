@@ -22,9 +22,13 @@ public interface IASTVisitor
 
     void Visit(FuncDeclStatement stmt);
 
-    void Visit(ReturnStatement stmt);
-
     void Visit(VarDeclStatement stmt);
+
+    void Visit(StructDeclStatement stmt);
+
+    void Visit(FieldDeclStatement stmt);
+
+    void Visit(ReturnStatement stmt);
     
     void Visit(CastExpression expr); 
 
@@ -43,6 +47,8 @@ public interface IASTVisitor
     void Visit(NewExpression expr);
 
     void Visit(ArrayInitExpression expr);
+
+    void Visit(MemberAccessExpression expr);
 
     void Visit(ArrayAccessExpression expr);
 }

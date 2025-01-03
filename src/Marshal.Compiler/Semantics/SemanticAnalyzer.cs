@@ -58,6 +58,16 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         }
     }
 
+    public void Visit(StructDeclStatement stmt)
+    {
+        
+    }
+
+    public void Visit(FieldDeclStatement stmt)
+    {
+
+    }
+
     public void Visit(FuncDeclStatement stmt)
     {
         FunctionSymbol function = stmt.Symbol;
@@ -76,7 +86,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
                     if (statement.ReturnExpr == null)
                         ReportDetailed(ErrorType.SemanticError, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais aucune valeur n'a été retournée.", statement.Loc);
                     else if (!IsTypeCompatible(statement.ReturnExpr.Type, function.ReturnType))
-                        ReportDetailed(ErrorType.SemanticError, $"la déclaration de retour attend une expression de type '{function.ReturnType.Name}' mais une expression de type '{statement.ReturnExpr.Type.Name}' a été reçue.", statement.ReturnExpr.Loc);
+                        ReportDetailed(ErrorType.SemanticError, $"le retour d'une valeur de type '{statement.ReturnExpr.Type.Name}' n'est pas directement possible '{function.ReturnType.Name}'. Un cast explicite peut-être nécessaire.", statement.ReturnExpr.Loc);
                 }
                 else
                 {
@@ -95,7 +105,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             
             if (!IsTypeCompatible(stmt.Initializer.Type, stmt.Symbol.DataType))
             {
-                ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}'.", stmt.Initializer.Loc);
+                ReportDetailed(ErrorType.SemanticError, $"l'assignement d'une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.Symbol.DataType.Name}' n'est pas directement possible. Un cast explicite est peut-être nécéssaire.", stmt.Initializer.Loc);
                 return;
             }
         }
@@ -113,7 +123,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
         if (!IsTypeCompatible(stmt.Initializer.Type, stmt.LExpr.Type))
         {
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.LExpr.Type.Name}'.", stmt.Initializer.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"l'assignement d'une valeur de type '{stmt.Initializer.Type.Name}' à '{stmt.LExpr.Type.Name}' n'est pas directement possible. Un cast explicite est peut-être nécéssaire.", stmt.Initializer.Loc);
         }
     }
 
@@ -146,11 +156,13 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
     public void Visit(CastExpression expr)
     {
-        if (expr.Type == expr.CastedExpr.Type)
-            ReportDetailed(ErrorType.Warning, $"casting non nécessaire entre '{expr.Type.Name}' et '{expr.CastedExpr.Type.Name}'.", expr.Loc);
+        CastKind castRes = expr.CastedExpr.Type.GetCastKind(expr.Type);
 
-        if (!CanExplicitlyCast(expr.CastedExpr.Type, expr.Type))
-            ReportDetailed(ErrorType.SemanticError, $"impossible de cast une expression de type '{expr.CastedExpr.Type.Name}' en '{expr.Type.Name}'", expr.Loc);
+        if (castRes == CastKind.Invalid)
+            ReportDetailed(ErrorType.SemanticError, $"impossible de cast la valeur '{expr.CastedExpr.Type.Name}' en '{expr.Type}'.", expr.Loc);
+
+        if (castRes == CastKind.Implicit)
+            ReportDetailed(ErrorType.Warning, $"casting non nécessaire entre '{expr.Type.Name}' et '{expr.CastedExpr.Type.Name}'.", expr.Loc);
     }
 
     public void Visit(FunCallExpression expr)
@@ -160,7 +172,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
         AnalyzeFunctionCall(function, expr.Args, expr.NameToken.Loc);
 
         if (function.ReturnType == MarshalType.Void)
-            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur à la fonction '{function.Name}' car elle retourne void.", expr.Loc);
+            ReportDetailed(ErrorType.SemanticError, $"impossible d'assigner une valeur à la fonction '{function.Name}' car elle n'attend rien en retour.", expr.Loc);
     }
 
 
@@ -178,6 +190,7 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
 
     public void Visit(BinaryOpExpression expr)
     {
+        
     }
 
     public void Visit(UnaryOpExpression expr)
@@ -188,12 +201,22 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
     {
     }
 
+    public void Visit(MemberAccessExpression expr)
+    {
+    }
+
     public void Visit(ArrayAccessExpression expr)
     {
     }
 
     public void Visit(ArrayInitExpression expr)
     {
+    }
+
+    private bool IsTypeCompatible(MarshalType source, MarshalType dest)
+    {
+        CastKind result = source.GetCastKind(dest);
+        return result == CastKind.Implicit;
     }
 
     private void AnalyzeFunctionCall(FunctionSymbol function, List<SyntaxExpression> args, Location functionLoc)
@@ -209,65 +232,12 @@ public class SemanticAnalyzer : CompilerPass, IASTVisitor
             SyntaxExpression paramExpr = args[i];
             VariableSymbol paramSymbol = function.Params[i];
 
-            if (!IsTypeCompatible(paramSymbol.DataType, paramExpr.Type))
+            CastKind castRes = paramSymbol.DataType.GetCastKind(paramExpr.Type);
+            if (castRes != CastKind.Implicit)
             {
-                ReportDetailed(ErrorType.SemanticError, $"l'argument '{paramSymbol.Name}' de la fonction '{function.Name}' attendait une expression de type '{paramSymbol.DataType.Name}' mais un argument de type '{paramExpr.Type.Name}' a été reçu.", paramExpr.Loc);
+                ReportDetailed(ErrorType.SemanticError, $"l'assignement d'une valeur de type '{paramExpr.Type.Name}' au type '{paramSymbol.DataType.Name}' n'est pas possible directement. Un cast explicite peut-être nécessaire.", paramExpr.Loc);
                 continue;
             }
         }
-    }
-
-    private static bool CanExplicitlyCast(MarshalType from, MarshalType to)
-    {
-        if (from.IsNumeric && to.IsNumeric)
-            return true;
-
-        if (from is PointerType && to.IsNumeric && ((PointerType)from).Pointee.IsNumeric)
-            return true;
-
-        if (from is PointerType && to is PointerType && ((PointerType)from).Pointee.IsNumeric && ((PointerType)to).Pointee.IsNumeric)
-            return true;
-
-        return false;
-    }
-
-    private static bool IsTypeCompatible(MarshalType left, MarshalType right)
-    {
-        if (left.Base.IsNumeric && right.Base.IsNumeric)
-            return true;
-
-        if (left.Base.IsBoolean && right.Base.IsBoolean)
-            return true;
-
-        if (left is PointerType leftPointer && right is PointerType rightPointer)
-        {
-            return IsTypeCompatible(leftPointer.Pointee, rightPointer.Pointee);
-        }
-
-        if (left is ArrayType leftArray && right is ArrayType rightArray)
-        {
-            return IsTypeCompatible(leftArray.ElementType, rightArray.ElementType);
-        }
-
-        if (left is TypeAlias lalias)
-        {
-            return IsTypeCompatible(lalias.Aliased, right);
-        }
-
-        if (right is TypeAlias ralias)
-        {
-            return IsTypeCompatible(left, ralias.Aliased);
-        }
-
-        if (left.Base.Name == right.Base.Name)
-            return true;
-
-        if (left.Base == MarshalType.Void || right.Base == MarshalType.Void)
-            return false;
-
-        if (left.Base == right.Base)
-            return true;
-
-        return false;
     }
 }

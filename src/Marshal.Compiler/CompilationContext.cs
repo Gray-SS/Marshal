@@ -1,4 +1,3 @@
-using Marshal.Compiler.Errors;
 using Marshal.Compiler.Semantics;
 using Marshal.Compiler.Syntax;
 using Swigged.LLVM;

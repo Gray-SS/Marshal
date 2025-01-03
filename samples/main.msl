@@ -1,31 +1,20 @@
-func extern putchar(c: char): int;
+func extern puts(s: string): int;
 
-proc print_int(value: int) {
-    if (value == 0) {
-        putchar('0');
-    }
+struct Vector2 {
+    x: int;
+    y: int;
+}
 
-    if (value < 0) {
-        putchar('-');
-        value = -value;
-    }
+func createVector(x: int, y: int): Vector2 {
+    var v: Vector2;
+    v.x = x;
+    v.y = y;
 
-    if (value / 10 != 0) {
-        print_int(value / 10);
-    }
-
-    var digit: char = value % 10 + '0';
-    putchar(digit);
+    return v;
 }
 
 func main(): int {
-    var a: int[] = new int[3];
-    a[0] = 5;
-    a[1] = 10;
-    a[2] = 15;
-
-    var p: int* = &a[1];
-    print_int(*((p - 1) + 2));
+    var v: Vector2 = createVector(1, 2);
     
     return 0;
 }
