@@ -1,12 +1,13 @@
-using CommandLine;
-
 namespace Marshal.Compiler.Utilities;
 
-public sealed class Options
+public class Options
 {
-    [Option('i', "input", Required = true, HelpText = "Provide all the inputs file")]
-    public IEnumerable<string> Inputs { get; set; } = null!;
+    public List<string> InputPaths { get; set; }
+    public string OutputPath { get; set; }
 
-    [Option('o', "output", Required = false, HelpText = "Set the output program file")]
-    public string Output { get; set; } = "program";
+    public Options()
+    {
+        InputPaths = new List<string>();
+        OutputPath = "a.out";
+    }
 }
