@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{40BC4A88-559
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marshal.Compiler", "src\Marshal.Compiler\Marshal.Compiler.csproj", "{0FCE12BC-CA39-4DAA-9BAC-74E6CC25555C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marshal.Core", "src\Marshal.Core\Marshal.Core.csproj", "{291827E9-A7EC-4323-A4BC-8B3F0147AF06}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Marshal.Backend", "src\Marshal.Backend\Marshal.Backend.csproj", "{76AE51C1-F63E-44C8-9B1B-636D6EED83F8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,18 @@ Global
 		{0FCE12BC-CA39-4DAA-9BAC-74E6CC25555C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0FCE12BC-CA39-4DAA-9BAC-74E6CC25555C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0FCE12BC-CA39-4DAA-9BAC-74E6CC25555C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{291827E9-A7EC-4323-A4BC-8B3F0147AF06}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{291827E9-A7EC-4323-A4BC-8B3F0147AF06}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{291827E9-A7EC-4323-A4BC-8B3F0147AF06}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{291827E9-A7EC-4323-A4BC-8B3F0147AF06}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76AE51C1-F63E-44C8-9B1B-636D6EED83F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76AE51C1-F63E-44C8-9B1B-636D6EED83F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76AE51C1-F63E-44C8-9B1B-636D6EED83F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76AE51C1-F63E-44C8-9B1B-636D6EED83F8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0FCE12BC-CA39-4DAA-9BAC-74E6CC25555C} = {40BC4A88-559D-4276-9131-FCAA82B0CC2F}
+		{291827E9-A7EC-4323-A4BC-8B3F0147AF06} = {40BC4A88-559D-4276-9131-FCAA82B0CC2F}
+		{76AE51C1-F63E-44C8-9B1B-636D6EED83F8} = {40BC4A88-559D-4276-9131-FCAA82B0CC2F}
 	EndGlobalSection
 EndGlobal

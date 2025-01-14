@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
-using Marshal.Compiler.Errors;
+using Marshal.Core.Errors;
 
-namespace Marshal.Compiler.Utilities;
+namespace Marshal.Core.Utilities;
 
 public static class ArgumentParser 
 {

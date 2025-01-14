@@ -10,8 +10,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.9.1" />
     <PackageReference Include="swigged.llvm" Version="70.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Marshal.Core\Marshal.Core.csproj" />
+    <ProjectReference Include="..\Marshal.Backend\Marshal.Backend.csproj" />
   </ItemGroup>
   
 </Project>

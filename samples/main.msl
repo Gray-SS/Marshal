@@ -1,20 +1,3 @@
-func extern puts(s: string): int;
-
-struct Vector2 {
-    x: int;
-    y: int;
-}
-
-func createVector(x: int, y: int): Vector2 {
-    var v: Vector2;
-    v.x = x;
-    v.y = y;
-
-    return v;
-}
-
 func main(): int {
-    var v: Vector2 = createVector(1, 2);
-    
     return 0;
 }

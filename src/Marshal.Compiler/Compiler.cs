@@ -1,10 +1,11 @@
 using System.Diagnostics;
-using Marshal.Compiler.Emit;
-using Marshal.Compiler.Errors;
-using Marshal.Compiler.IR;
-using Marshal.Compiler.Semantics;
-using Marshal.Compiler.Syntax;
-using Marshal.Compiler.Utilities;
+using Marshal.Core;
+using Marshal.Core.Emit;
+using Marshal.Core.Errors;
+using Marshal.Core.IR;
+using Marshal.Core.Semantics;
+using Marshal.Core.Syntax;
+using Marshal.Core.Utilities;
 
 namespace Marshal.Compiler;
 
@@ -36,37 +37,35 @@ public class Compiler
 
         bool success = true;
 
-        var paths = _options.Inputs;
-        if (paths.Any())
-        {
-            var objs = new List<string>(); 
-
-            foreach (string path in paths)
-            {
-                if (!CompileFile(path, out string objFile))
-                {
-                    success = false;
-                    continue;
-                }
-
-                objs.Add(objFile);
-            }
-
-            if (success)
-            {
-                CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.Output}");
-
-                foreach (var obj in objs)
-                    File.Delete(obj);
-            }
-
-            sw.Stop();
-        }
-        else
+        var paths = _options.InputPaths;
+        if (paths.Count == 0)
         {
             success = false;
             _errorHandler.Report(ErrorType.Fatal, "aucun fichier source fourni");
         }
+
+        var objs = new List<string>(); 
+
+        foreach (string path in paths)
+        {
+            if (!CompileFile(path, out string objFile))
+            {
+                success = false;
+                continue;
+            }
+
+            objs.Add(objFile);
+        }
+
+        if (success)
+        {
+            CommandExecutor.ExecuteCommand($"clang {string.Join(' ', objs)} -o {_options.OutputPath}");
+
+            foreach (var obj in objs)
+                File.Delete(obj);
+        }
+
+        sw.Stop();
         
         var color = success ? ConsoleColor.DarkGreen : ConsoleColor.Yellow;
         ConsoleHelper.WriteLine(color, $"compilation terminée {(success ? "avec succès" : "avec échec")}.");
@@ -91,8 +90,8 @@ public class Compiler
             return false;
         }
 
-        var context = new CompilationContext(relativePath, GlobalTable);
-        var passes = new List<CompilerPass>() 
+        var context = new CompilationContext(relativePath);
+        var passes = new List<CompilerPass>()
         {
             new Lexer(context, _errorHandler),
             new Parser(context, _errorHandler),

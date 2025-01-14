@@ -1,10 +1,10 @@
-﻿using CommandLine;
-using Marshal.Compiler;
-using Marshal.Compiler.Utilities;
+﻿using Marshal.Compiler;
+using Marshal.Core.Errors;
+using Marshal.Core.Utilities;
 
-Parser.Default.ParseArguments<Options>(args)
-    .WithParsed(o => {
-        var compiler = new Compiler(o);
-        if (!compiler.Compile())
-            Environment.Exit(1);
-    });
+var errorHandler = new ErrorHandler(); 
+if (!ArgumentParser.Parse(args, errorHandler, out Options options))
+    return;
+
+var compiler = new Compiler(options);
+compiler.Compile();
