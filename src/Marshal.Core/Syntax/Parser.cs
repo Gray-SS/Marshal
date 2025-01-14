@@ -1,7 +1,6 @@
 using Marshal.Core.Errors;
 using Marshal.Core.Syntax.Expressions;
 using Marshal.Core.Syntax.Statements;
-using Marshal.Core.Utilities;
 
 namespace Marshal.Core.Syntax;
 
@@ -10,14 +9,11 @@ public class Parser : CompilerPass
     public int Position { get; private set; }
     public Token CurrentToken => Peek(0);
 
-    public Parser(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
-    {
-    }
+    private readonly List<Token> _tokens;
 
-    public override void Apply()
+    public Parser(List<Token> tokens, CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
-        Context.AST = ParseAST();
-        // Context.AST.Dump();
+        _tokens = tokens;
     }
 
     public CompilationUnit ParseAST()
@@ -723,14 +719,14 @@ public class Parser : CompilerPass
 
     private Token NextToken()
     {
-        Token token = Context.Tokens![Position++];
+        Token token = _tokens![Position++];
         return token;
     }
 
     private Token Peek(int offset)
     {
-        int pos = Math.Min(Position + offset, Context.Tokens!.Count - 1);
-        return Context.Tokens![pos];
+        int pos = Math.Min(Position + offset, _tokens!.Count - 1);
+        return _tokens![pos];
     }
 }
 

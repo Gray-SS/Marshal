@@ -2,18 +2,22 @@ using Marshal.Core.Errors;
 using Marshal.Core.Syntax;
 using Marshal.Core.Syntax.Expressions;
 using Marshal.Core.Syntax.Statements;
+using Marshal.Core.Visitors;
 
 namespace Marshal.Core.Semantics;
 
-public class SemanticAnalyzer : CompilerPass, IExprVisitor
+public class SemanticAnalyzer : CompilerPass, IASTVisitor
 {
-    public SemanticAnalyzer(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
+    private readonly CompilationUnit _unit;
+
+    public SemanticAnalyzer(CompilationUnit unit, CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
+        _unit = unit;
     }
 
-    public override void Apply()
+    public void Process()
     {
-        Visit(Context.AST);
+        _unit.Accept(this);
     }
 
     public void Visit(CompilationUnit unit)

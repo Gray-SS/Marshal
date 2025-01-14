@@ -1,7 +1,7 @@
 using Marshal.Core.Semantics;
 using Swigged.LLVM;
 
-namespace Marshal.Core.IR;
+namespace Marshal.Backend.IR;
 
 public class LLVMTypeResolver
 {

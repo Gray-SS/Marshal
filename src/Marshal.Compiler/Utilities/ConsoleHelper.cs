@@ -1,4 +1,4 @@
-namespace Marshal.Core.Utilities;
+namespace Marshal.Core.Utils;
 
 public static class ConsoleHelper
 {

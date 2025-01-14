@@ -14,9 +14,7 @@ public abstract class CompilerPass
         Context = context;
         ErrorHandler = errorHandler;
     }
-
-    public abstract void Apply();
-
+    
     protected void Report(ErrorType type, string message)
     {
         ErrorHandler.Report(type, message);

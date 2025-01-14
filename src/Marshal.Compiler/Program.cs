@@ -1,6 +1,6 @@
 ﻿using Marshal.Compiler;
 using Marshal.Core.Errors;
-using Marshal.Core.Utilities;
+using Marshal.Core.Utils;
 
 var errorHandler = new ErrorHandler(); 
 if (!ArgumentParser.Parse(args, errorHandler, out Options options))

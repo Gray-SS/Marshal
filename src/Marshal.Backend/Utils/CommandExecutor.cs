@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Marshal.Core.Utilities;
+namespace Marshal.Backend.Utils;
 
 public class CommandExecutor
 {

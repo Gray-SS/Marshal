@@ -12,18 +12,13 @@ public class Lexer : CompilerPass
     private int _line;
     private int _column;
 
-    public Lexer(CompilationContext source, ErrorHandler errorHandler) : base(source, errorHandler)
+    public Lexer(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
         _line = 1;
         _column = 1;
     }
 
-    public override void Apply()
-    {
-        Context.Tokens = Tokenize();
-    }
-
-    private List<Token> Tokenize()
+    public List<Token> Tokenize()
     {
         var tokens = new List<Token>();
 

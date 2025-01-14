@@ -1,11 +1,13 @@
 using System.Diagnostics;
+using Marshal.Backend;
+using Marshal.Backend.Emit;
+using Marshal.Backend.IR;
+using Marshal.Backend.Utils;
 using Marshal.Core;
-using Marshal.Core.Emit;
 using Marshal.Core.Errors;
-using Marshal.Core.IR;
 using Marshal.Core.Semantics;
 using Marshal.Core.Syntax;
-using Marshal.Core.Utilities;
+using Marshal.Core.Utils;
 
 namespace Marshal.Compiler;
 
@@ -14,7 +16,7 @@ public class Compiler
     public SymbolTable GlobalTable { get; }
 
     private readonly Options _options;
-    private readonly ErrorHandler _errorHandler = new();
+    private readonly ErrorHandler _errorHandler = new(ErrorLogger.Default);
 
     public Compiler(Options options)
     {
@@ -74,9 +76,9 @@ public class Compiler
         return success;
     }
 
-    private bool CompileFile(string relativePath, out string objFile)
+    private bool CompileFile(string relativePath, out string objectPath)
     {
-        objFile = string.Empty;
+        objectPath = string.Empty;
 
         if (string.IsNullOrEmpty(relativePath))
         {
@@ -91,25 +93,25 @@ public class Compiler
         }
 
         var context = new CompilationContext(relativePath);
-        var passes = new List<CompilerPass>()
-        {
-            new Lexer(context, _errorHandler),
-            new Parser(context, _errorHandler),
-            new SymbolTableBuilder(context, _errorHandler),
-            new SemanticAnalyzer(context, _errorHandler),
-            new IRGenerator(context, _errorHandler),
-            new ObjectEmitter(context, _errorHandler),
-        };
 
-        foreach (CompilerPass pass in passes)
-        {
-            pass.Apply();
+        var lexer = new Lexer(context, _errorHandler);
+        List<Token> tokens = lexer.Tokenize();
+        
+        var parser = new Parser(tokens, context, _errorHandler);
+        CompilationUnit unit = parser.ParseAST();
 
-            if (_errorHandler.HasError)
-                return false;
-        }
+        var symbolTableBuilder = new SymbolTableBuilder(unit, context, _errorHandler);
+        symbolTableBuilder.Process();
 
-        objFile = context.ObjFilePath;
+        var semanticAnalyzer = new SemanticAnalyzer(unit, context, _errorHandler);
+        semanticAnalyzer.Process();
+
+        var irGenerator = new IRGenerator(unit, context, _errorHandler);
+        IBackendModule module = irGenerator.Generate();
+
+        var emitter = new ObjectEmitter(module, context, _errorHandler);
+        objectPath = emitter.Emit();
+
         return true;
     }
 }

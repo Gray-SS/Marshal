@@ -7,8 +7,9 @@ using Marshal.Core.Semantics;
 using System.Buffers;
 using System.Diagnostics;
 using Marshal.Core.Visitors;
+using Marshal.Core;
 
-namespace Marshal.Core.IR;
+namespace Marshal.Backend.IR;
 
 public class Struct 
 {
@@ -141,9 +142,9 @@ public class IRGenerator : CompilerPass, IASTVisitor
     private const string FUNCTION_RET_VAR_NAME = "ret_value";
 
     private int _globalStrCount;
-    private ModuleRef _module;
-    private ContextRef _context;
-    private BuilderRef _builder;
+    private ContextRef _contextRef;
+
+    private LLVMModule _module = null!;
     private LLVMTypeResolver _typeResolver = null!;
 
     private ValueRef ZeroInt;
@@ -152,41 +153,45 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
 
     private Function? _crntFn;
+    private readonly LLVMContext _context;
     private readonly Stack<ValueRef> _valueStack;
     private readonly Dictionary<string, INamedValue> _variables;
     private readonly Dictionary<string, Function> _functions;
     private readonly Dictionary<string, Struct> _structs;
 
-    public IRGenerator(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
+    private readonly CompilationUnit _unit;
+
+    public IRGenerator(LLVMContext context, CompilationUnit unit, CompilationContext ccontext, ErrorHandler errorHandler) : base(ccontext, errorHandler)
     {
         _variables = new Dictionary<string, INamedValue>();
         _functions = new Dictionary<string, Function>();
         _structs = new Dictionary<string, Struct>();
+        _unit = unit;
+        _context = context;
 
         _valueStack = new Stack<ValueRef>();
     }
 
-    public override void Apply()
+    public BackendModule Generate()
     {
-        _context = LLVM.ContextCreate();
-        _module = LLVM.ModuleCreateWithNameInContext(Context.FullPath, _context);
-        _builder = LLVM.CreateBuilderInContext(_context);
-        _typeResolver = new LLVMTypeResolver(_context, _structs);
+        LLVMModule module = _context.CreateModule(Context.RelativePath);
+
+        _typeResolver = new LLVMTypeResolver(_contextRef, _structs);
 
         TypeRef intType = _typeResolver.Resolve(MarshalType.Int);
         ZeroInt = LLVM.ConstInt(intType, 0, true);
         OneInt = LLVM.ConstInt(intType, 1, true);
         MinusOneInt = LLVM.ConstInt(intType, 0xFFFFFFFF, true);
 
-        Visit(Context.AST);
-        Context.Module = _module;
+        _unit.Accept(this);
 
-        LLVM.DumpModule(Context.Module);
+        LLVM.DumpModule(module.ModuleRef);
 
         var message = new MyString();
-        LLVM.VerifyModule(_module, VerifierFailureAction.AbortProcessAction, message);
-        
-        LLVM.DisposeBuilder(_builder);
+        LLVM.VerifyModule(module.ModuleRef, VerifierFailureAction.AbortProcessAction, message);
+        LLVM.DisposeBuilder(module.BuilderRef);
+
+        return module;
     }
 
     public void Visit(CompilationUnit unit)
@@ -199,7 +204,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
     public void Visit(IfStatement stmt)
     {
-        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
+        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_module.BuilderRef));
         BasicBlockRef mergeBB = LLVM.AppendBasicBlock(fn, "merge");
 
         foreach (var item in stmt.IfsScopes)
@@ -208,44 +213,44 @@ public class IRGenerator : CompilerPass, IASTVisitor
             BasicBlockRef elseBB = LLVM.AppendBasicBlock(fn, "else");
 
             ValueRef cond = EvaluateExpr(item.ConditionExpr);
-            LLVM.BuildCondBr(_builder, cond, thenBB, elseBB);
+            LLVM.BuildCondBr(_module.BuilderRef, cond, thenBB, elseBB);
 
-            LLVM.PositionBuilderAtEnd(_builder, thenBB);
+            LLVM.PositionBuilderAtEnd(_module.BuilderRef, thenBB);
             item.Scope.Accept(this);
 
             if (!item.Scope.IsReturning)
-                LLVM.BuildBr(_builder, mergeBB);
+                LLVM.BuildBr(_module.BuilderRef, mergeBB);
 
-            LLVM.PositionBuilderAtEnd(_builder, elseBB);
+            LLVM.PositionBuilderAtEnd(_module.BuilderRef, elseBB);
         }
 
         stmt.ElseScope?.Accept(this);
         if (stmt.ElseScope == null || !stmt.ElseScope.IsReturning)
-            LLVM.BuildBr(_builder, mergeBB);
+            LLVM.BuildBr(_module.BuilderRef, mergeBB);
 
-        LLVM.PositionBuilderAtEnd(_builder, mergeBB);
+        LLVM.PositionBuilderAtEnd(_module.BuilderRef, mergeBB);
     }
 
     public void Visit(WhileStatement stmt)
     {
-        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_builder));
+        ValueRef fn = LLVM.GetBasicBlockParent(LLVM.GetInsertBlock(_module.BuilderRef));
         BasicBlockRef mergeBB = LLVM.AppendBasicBlock(fn, "merge");
         BasicBlockRef preBB = LLVM.AppendBasicBlock(fn, "pre");
         BasicBlockRef thenBB = LLVM.AppendBasicBlock(fn, "then");
 
-        LLVM.BuildBr(_builder, preBB);
+        LLVM.BuildBr(_module.BuilderRef, preBB);
 
-        LLVM.PositionBuilderAtEnd(_builder, preBB);
+        LLVM.PositionBuilderAtEnd(_module.BuilderRef, preBB);
         ValueRef condValue = EvaluateExpr(stmt.CondExpr); 
-        LLVM.BuildCondBr(_builder, condValue, thenBB, mergeBB);
+        LLVM.BuildCondBr(_module.BuilderRef, condValue, thenBB, mergeBB);
 
-        LLVM.PositionBuilderAtEnd(_builder, thenBB);
+        LLVM.PositionBuilderAtEnd(_module.BuilderRef, thenBB);
         stmt.Scope.Accept(this);
 
         if (!stmt.Scope.IsReturning)
-            LLVM.BuildBr(_builder, preBB);
+            LLVM.BuildBr(_module.BuilderRef, preBB);
 
-        LLVM.PositionBuilderAtEnd(_builder, mergeBB);
+        LLVM.PositionBuilderAtEnd(_module.BuilderRef, mergeBB);
     }
 
     public void Visit(ScopeStatement stmt)
@@ -265,7 +270,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         if (kind == CastKind.Implicit)
             value = CastValue(value, stmt.Initializer.Type, stmt.LExpr.Type);
 
-        LLVM.BuildStore(_builder, value, lValue);
+        LLVM.BuildStore(_module.BuilderRef, value, lValue);
     }
 
     public void Visit(IncrementStatement stmt)
@@ -276,14 +281,14 @@ public class IRGenerator : CompilerPass, IASTVisitor
         {
             ValueRef result;
             
-            ValueRef varValue = variable.Load(_builder);
+            ValueRef varValue = variable.Load(_module.BuilderRef);
 
             //TODO: Set the sign extend flag relative to the variable type
             ValueRef one = LLVM.ConstInt(variable.Type, 1, true);
-            if (stmt.Decrement) result = LLVM.BuildSub(_builder, varValue, one, "inc_result");
-            else result = LLVM.BuildAdd(_builder, varValue, one, "inc_result");
+            if (stmt.Decrement) result = LLVM.BuildSub(_module.BuilderRef, varValue, one, "inc_result");
+            else result = LLVM.BuildAdd(_module.BuilderRef, varValue, one, "inc_result");
 
-            LLVM.BuildStore(_builder, result, variable.Pointer);
+            LLVM.BuildStore(_module.BuilderRef, result, variable.Pointer);
         }
         else
         {
@@ -299,11 +304,11 @@ public class IRGenerator : CompilerPass, IASTVisitor
             // next, we're getting the next element of the pointed type.
             // finally we're storing the new pointed memory to the pointer variable
 
-            ValueRef ptr = variable.Load(_builder);
-            if (!stmt.Decrement) ptr = LLVM.BuildGEP(_builder, ptr, [ OneInt ], "inc_result"); 
-            else ptr = LLVM.BuildGEP(_builder, ptr, [ MinusOneInt ], "dec_result");
+            ValueRef ptr = variable.Load(_module.BuilderRef);
+            if (!stmt.Decrement) ptr = LLVM.BuildGEP(_module.BuilderRef, ptr, [ OneInt ], "inc_result"); 
+            else ptr = LLVM.BuildGEP(_module.BuilderRef, ptr, [ MinusOneInt ], "dec_result");
 
-            LLVM.BuildStore(_builder, ptr, variable.Pointer);
+            LLVM.BuildStore(_module.BuilderRef, ptr, variable.Pointer);
         }
     }
 
@@ -318,7 +323,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         StructType symbol = stmt.Symbol;
 
         TypeRef[] fieldTypes = symbol.Fields.Select(f => _typeResolver.Resolve(f.DataType)).ToArray();
-        TypeRef structType = LLVM.StructCreateNamed(_context, stmt.Identifier.Value);
+        TypeRef structType = LLVM.StructCreateNamed(_context.ContextRef, stmt.Identifier.Value);
         LLVM.StructSetBody(structType, fieldTypes, false);
 
         var @struct = new Struct(symbol, structType, fieldTypes); 
@@ -337,7 +342,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         TypeRef[] paramTypes = functionSymbol.Params.Select(x => _typeResolver.Resolve(x.DataType)).ToArray();
 
         TypeRef functionType = LLVM.FunctionType(retType, paramTypes, false);
-        ValueRef fn = LLVM.AddFunction(_module, functionSymbol.Name, functionType);
+        ValueRef fn = LLVM.AddFunction(_module.ModuleRef, functionSymbol.Name, functionType);
 
         Function function = new Function(functionSymbol, retType, fn);
         _functions[function.Name] = function;
@@ -350,15 +355,15 @@ public class IRGenerator : CompilerPass, IASTVisitor
             _crntFn = function;
             BasicBlockRef entryBB = LLVM.AppendBasicBlock(fn, "entry");
 
-            LLVM.PositionBuilderAtEnd(_builder, entryBB);
+            LLVM.PositionBuilderAtEnd(_module.BuilderRef, entryBB);
             for (int i = 0; i < functionSymbol.Params.Count; i++)
             {
                 VariableSymbol paramSymbol = functionSymbol.Params[i];
                 TypeRef paramType = _typeResolver.Resolve(paramSymbol.DataType);
 
                 ValueRef paramValue = LLVM.GetParam(fn, (uint)i);
-                ValueRef paramPtr = LLVM.BuildAlloca(_builder, paramType, $"{paramSymbol.Name}_ptr");
-                LLVM.BuildStore(_builder, paramValue, paramPtr);
+                ValueRef paramPtr = LLVM.BuildAlloca(_module.BuilderRef, paramType, $"{paramSymbol.Name}_ptr");
+                LLVM.BuildStore(_module.BuilderRef, paramValue, paramPtr);
 
                 var param = new Param(paramSymbol, paramType, paramPtr);
                 _variables[param.Name] = param;
@@ -366,30 +371,30 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
             if (functionSymbol.ReturnType != MarshalType.Void)
             {
-                ValueRef returnPtr = LLVM.BuildAlloca(_builder, retType, FUNCTION_RET_VAR_NAME);
+                ValueRef returnPtr = LLVM.BuildAlloca(_module.BuilderRef, retType, FUNCTION_RET_VAR_NAME);
                 function.ReturnPointer = returnPtr;
             }
 
             BasicBlockRef returnBB = LLVM.AppendBasicBlock(fn, "return");
             function.ReturnBlock = returnBB;
 
-            LLVM.PositionBuilderAtEnd(_builder, returnBB);
+            LLVM.PositionBuilderAtEnd(_module.BuilderRef, returnBB);
 
             if (functionSymbol.ReturnType != MarshalType.Void)
             {
-                var retValue = LLVM.BuildLoad(_builder, function.ReturnPointer, "ret_value");
-                LLVM.BuildRet(_builder, retValue);
+                var retValue = LLVM.BuildLoad(_module.BuilderRef, function.ReturnPointer, "ret_value");
+                LLVM.BuildRet(_module.BuilderRef, retValue);
             }
-            else LLVM.BuildRetVoid(_builder);
+            else LLVM.BuildRetVoid(_module.BuilderRef);
 
-            LLVM.PositionBuilderAtEnd(_builder, entryBB); 
+            LLVM.PositionBuilderAtEnd(_module.BuilderRef, entryBB); 
 
             stmt.Body.Accept(this);
 
             _crntFn = default;
 
             if (!stmt.Body.IsReturning)
-                LLVM.BuildBr(_builder, returnBB);
+                LLVM.BuildBr(_module.BuilderRef, returnBB);
         }
     }
 
@@ -408,10 +413,10 @@ public class IRGenerator : CompilerPass, IASTVisitor
             if (kind == CastKind.Implicit)
                 value = CastValue(value, stmt.ReturnExpr.Type, _crntFn.Symbol.ReturnType);
 
-            LLVM.BuildStore(_builder, value, _crntFn.ReturnPointer);
+            LLVM.BuildStore(_module.BuilderRef, value, _crntFn.ReturnPointer);
         }
 
-        LLVM.BuildBr(_builder, _crntFn.ReturnBlock);
+        LLVM.BuildBr(_module.BuilderRef, _crntFn.ReturnBlock);
     }
 
     public void Visit(VarDeclStatement stmt)
@@ -421,7 +426,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         TypeRef varType = _typeResolver.Resolve(variableSymbol.DataType);
 
         var variable = new Variable(variableSymbol, varType);
-        variable.Allocate(_builder);
+        variable.Allocate(_module.BuilderRef);
 
         if (stmt.Initializer != null)
         {
@@ -431,7 +436,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
             if (kind == CastKind.Implicit)
                 value = CastValue(value, stmt.Initializer.Type, stmt.Symbol.DataType);
 
-            variable.Store(_builder, value);
+            variable.Store(_module.BuilderRef, value);
         }
 
         _variables[variableSymbol.Name] = variable;
@@ -465,16 +470,16 @@ public class IRGenerator : CompilerPass, IASTVisitor
         return operation switch
         {
             CastOperation.Identity => operand,
-            CastOperation.Bitcast => LLVM.BuildBitCast(_builder, operand, targetLLVMType, "bitcast_tmp"),
-            CastOperation.SignExtend => LLVM.BuildSExt(_builder, operand, targetLLVMType, "sext_tmp"),
-            CastOperation.ZeroExtend => LLVM.BuildZExt(_builder, operand, targetLLVMType, "zext_tmp"),
-            CastOperation.Truncate => LLVM.BuildTrunc(_builder, operand, targetLLVMType, "trunc_tmp"),
-            CastOperation.Float2SInt => LLVM.BuildFPToSI(_builder, operand, targetLLVMType, "fptosi_tmp"),
-            CastOperation.Float2UInt => LLVM.BuildFPToUI(_builder, operand, targetLLVMType, "fptoui_tmp"),
-            CastOperation.SInt2Float => LLVM.BuildSIToFP(_builder, operand, targetLLVMType, "sitofp_tmp"),
-            CastOperation.UInt2Float => LLVM.BuildUIToFP(_builder, operand, targetLLVMType, "uitofp_tmp"),
-            CastOperation.FloatTrunc => LLVM.BuildFPTrunc(_builder, operand, targetLLVMType, "fptrunc_tmp"),
-            CastOperation.FloatExt => LLVM.BuildFPExt(_builder, operand, targetLLVMType, "fpext_temp"),
+            CastOperation.Bitcast => LLVM.BuildBitCast(_module.BuilderRef, operand, targetLLVMType, "bitcast_tmp"),
+            CastOperation.SignExtend => LLVM.BuildSExt(_module.BuilderRef, operand, targetLLVMType, "sext_tmp"),
+            CastOperation.ZeroExtend => LLVM.BuildZExt(_module.BuilderRef, operand, targetLLVMType, "zext_tmp"),
+            CastOperation.Truncate => LLVM.BuildTrunc(_module.BuilderRef, operand, targetLLVMType, "trunc_tmp"),
+            CastOperation.Float2SInt => LLVM.BuildFPToSI(_module.BuilderRef, operand, targetLLVMType, "fptosi_tmp"),
+            CastOperation.Float2UInt => LLVM.BuildFPToUI(_module.BuilderRef, operand, targetLLVMType, "fptoui_tmp"),
+            CastOperation.SInt2Float => LLVM.BuildSIToFP(_module.BuilderRef, operand, targetLLVMType, "sitofp_tmp"),
+            CastOperation.UInt2Float => LLVM.BuildUIToFP(_module.BuilderRef, operand, targetLLVMType, "uitofp_tmp"),
+            CastOperation.FloatTrunc => LLVM.BuildFPTrunc(_module.BuilderRef, operand, targetLLVMType, "fptrunc_tmp"),
+            CastOperation.FloatExt => LLVM.BuildFPExt(_module.BuilderRef, operand, targetLLVMType, "fpext_temp"),
             _ => throw new NotImplementedException($"The cast operation '{operation}' is currently not supported."),
         };
     }
@@ -500,11 +505,11 @@ public class IRGenerator : CompilerPass, IASTVisitor
         switch (expr.Operation)
         {
             case UnaryOpType.Negation:
-                result = LLVM.BuildNeg(_builder, operand, "negTmp");
+                result = LLVM.BuildNeg(_module.BuilderRef, operand, "negTmp");
                 break;
 
             case UnaryOpType.Not:
-                result = LLVM.BuildNot(_builder, operand, "notTmp");
+                result = LLVM.BuildNot(_module.BuilderRef, operand, "notTmp");
                 break;
 
             case UnaryOpType.AddressOf:
@@ -512,7 +517,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
                 break;
 
             case UnaryOpType.Deference:
-                if (expr.Operand.ValueCategory == ValueCategory.Locator) result = LLVM.BuildLoad(_builder, operand, "defTmp");
+                if (expr.Operand.ValueCategory == ValueCategory.Locator) result = LLVM.BuildLoad(_module.BuilderRef, operand, "defTmp");
                 else result = operand;
                 break;
 
@@ -542,11 +547,11 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
             if (expr.Operation == BinOpType.Addition)
             {
-                result = LLVM.BuildGEP(_builder, ptr, [ numeric ], "ptra_result");
+                result = LLVM.BuildGEP(_module.BuilderRef, ptr, [ numeric ], "ptra_result");
             }
             else if (expr.Operation == BinOpType.Subtraction)
             {
-                result = LLVM.BuildGEP(_builder, ptr, [ LLVM.BuildNeg(_builder, numeric, "neg_numeric") ], "ptr_sub_result");
+                result = LLVM.BuildGEP(_module.BuilderRef, ptr, [ LLVM.BuildNeg(_module.BuilderRef, numeric, "neg_numeric") ], "ptr_sub_result");
             }
             else
                 throw new InvalidOperationException($"Operation '{expr.Operation}' is not supported for pointer arithmetics.");
@@ -581,17 +586,17 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
             result = expr.Operation switch
             {
-                BinOpType.Addition => LLVM.BuildAdd(_builder, left, right, "add_result"),
-                BinOpType.Subtraction => LLVM.BuildSub(_builder, left, right, "sub_result"),
-                BinOpType.Multiplication => LLVM.BuildMul(_builder, left, right, "mul_result"),
-                BinOpType.Division => LLVM.BuildSDiv(_builder, left, right, "div_result"),
-                BinOpType.Modulo => LLVM.BuildSRem(_builder, left, right, "mod_result"),
-                BinOpType.Equals => LLVM.BuildICmp(_builder, IntPredicate.IntEQ, left, right, "eq_result"),
-                BinOpType.NotEquals => LLVM.BuildICmp(_builder, IntPredicate.IntNE, left, right, "ne_result"),
-                BinOpType.BiggerThan => LLVM.BuildICmp(_builder, IntPredicate.IntSGT, left, right, "gt_result"),
-                BinOpType.BiggerThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSGE, left, right, "ge_result"),
-                BinOpType.LessThan => LLVM.BuildICmp(_builder, IntPredicate.IntSLT, left, right, "lt_result"),
-                BinOpType.LessThanEq => LLVM.BuildICmp(_builder, IntPredicate.IntSLE, left, right, "le_result"),
+                BinOpType.Addition => LLVM.BuildAdd(_module.BuilderRef, left, right, "add_result"),
+                BinOpType.Subtraction => LLVM.BuildSub(_module.BuilderRef, left, right, "sub_result"),
+                BinOpType.Multiplication => LLVM.BuildMul(_module.BuilderRef, left, right, "mul_result"),
+                BinOpType.Division => LLVM.BuildSDiv(_module.BuilderRef, left, right, "div_result"),
+                BinOpType.Modulo => LLVM.BuildSRem(_module.BuilderRef, left, right, "mod_result"),
+                BinOpType.Equals => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntEQ, left, right, "eq_result"),
+                BinOpType.NotEquals => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntNE, left, right, "ne_result"),
+                BinOpType.BiggerThan => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntSGT, left, right, "gt_result"),
+                BinOpType.BiggerThanEq => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntSGE, left, right, "ge_result"),
+                BinOpType.LessThan => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntSLT, left, right, "lt_result"),
+                BinOpType.LessThanEq => LLVM.BuildICmp(_module.BuilderRef, IntPredicate.IntSLE, left, right, "le_result"),
 
                 _ => throw new NotImplementedException($"Unsupported binary operation: {expr.Operation}"),
             };
@@ -627,7 +632,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
             case LiteralType.String:
             {
                 string str = expr.Token.Value;
-                _valueStack.Push(LLVM.BuildGlobalStringPtr(_builder, str, GetGlobalStrName()));
+                _valueStack.Push(LLVM.BuildGlobalStringPtr(_module.BuilderRef, str, GetGlobalStrName()));
             } break;
 
             case LiteralType.Char:
@@ -644,7 +649,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         if (_variables.TryGetValue(var.Name, out INamedValue? variable))
         {
-            ValueRef pointer = variable.GetDataPointer(_builder);
+            ValueRef pointer = variable.GetDataPointer(_module.BuilderRef);
             _valueStack.Push(pointer);
         }
         else 
@@ -662,7 +667,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
             var lengthValue = EvaluateExpr(arrayExpr.LengthExpr);
 
-            ValueRef arrayPtr = LLVM.BuildArrayMalloc(_builder, elementType, lengthValue, $"array_malloc");
+            ValueRef arrayPtr = LLVM.BuildArrayMalloc(_module.BuilderRef, elementType, lengthValue, $"array_malloc");
             _valueStack.Push(arrayPtr);
         }
         else if (expr is NewStructExpression typeExpr)
@@ -682,7 +687,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
     public void Visit(MemberAccessExpression expr)
     {
         ValueRef varPtr = EvaluateExpr(expr.VarExpr, false);
-        ValueRef memberPtr = LLVM.BuildStructGEP(_builder, varPtr, (uint)expr.MemberIdx, "member_ptr");
+        ValueRef memberPtr = LLVM.BuildStructGEP(_module.BuilderRef, varPtr, (uint)expr.MemberIdx, "member_ptr");
 
         _valueStack.Push(memberPtr);
     }
@@ -698,7 +703,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         ValueRef indexorPtr = EvaluateExpr(expr.ArrayExpr, false);
         ValueRef indexValue = EvaluateExpr(expr.IndexExpr);
 
-        ValueRef elementPtr = LLVM.BuildGEP(_builder, indexorPtr, [ indexValue ], "array_iptr");
+        ValueRef elementPtr = LLVM.BuildGEP(_module.BuilderRef, indexorPtr, [ indexValue ], "array_iptr");
         _valueStack.Push(elementPtr);
     }
 
@@ -731,7 +736,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
         }
 
         string returnName = function.ReturnType == MarshalType.Void ? string.Empty : $"{function.Name}_result"; 
-        return LLVM.BuildCall(_builder, fn.Pointer, argsValue, returnName);
+        return LLVM.BuildCall(_module.BuilderRef, fn.Pointer, argsValue, returnName);
     }
 
     private ValueRef EvaluateExpr(SyntaxExpression expr, bool loadLocator = true)
@@ -741,7 +746,7 @@ public class IRGenerator : CompilerPass, IASTVisitor
 
         if (expr.ValueCategory == ValueCategory.Locator && loadLocator)
         {
-            value = LLVM.BuildLoad(_builder, value, "locator_load");
+            value = LLVM.BuildLoad(_module.BuilderRef, value, "locator_load");
         }
 
         return value;

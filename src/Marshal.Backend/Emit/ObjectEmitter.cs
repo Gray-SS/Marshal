@@ -1,21 +1,22 @@
+using Marshal.Backend.Utils;
+using Marshal.Core;
 using Marshal.Core.Errors;
-using Marshal.Core.Utilities;
-using Swigged.LLVM;
 
-namespace Marshal.Core.Emit;
+namespace Marshal.Backend.Emit;
 
 public class ObjectEmitter : CompilerPass
 {
-    public ObjectEmitter(CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
+    private readonly IBackendModule _module;
+
+    public ObjectEmitter(IBackendModule module, CompilationContext context, ErrorHandler errorHandler) : base(context, errorHandler)
     {
+        _module = module;
     }
 
-    public override void Apply()
+    public string Emit()
     {
-        ModuleRef module = Context.Module;
-
         string llvmPath = $"{Path.ChangeExtension(Context.RelativePath, ".ll")}";
-        LLVM.WriteBitcodeToFile(module, llvmPath);
+        _module.WriteToFile(llvmPath);
 
         string objectPath = $"{Path.ChangeExtension(Context.RelativePath, ".o")}";
 
@@ -24,6 +25,6 @@ public class ObjectEmitter : CompilerPass
 
         File.Delete(llvmPath);
 
-        Context.ObjFilePath = objectPath;
+        return objectPath;
     }
 }
