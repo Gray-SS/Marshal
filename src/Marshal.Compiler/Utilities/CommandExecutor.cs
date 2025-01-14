@@ -21,11 +21,10 @@ public class CommandExecutor
 
             using Process process = new Process { StartInfo = psi };
             process.Start();
+            process.WaitForExit();
 
             string output = process.StandardOutput.ReadToEnd();
             string error = process.StandardError.ReadToEnd();
-
-            process.WaitForExit();
 
             if (!string.IsNullOrEmpty(error))
             {
